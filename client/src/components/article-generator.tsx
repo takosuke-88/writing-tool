@@ -131,7 +131,7 @@ export function ArticleGenerator({ selectedArticle, onClearSelection }: ArticleG
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground" data-testid="text-app-title">
-              Claude SEO Article Generator
+              Claude Writing Tool
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5" data-testid="text-app-subtitle">
               AIが人間らしく記事を書く
