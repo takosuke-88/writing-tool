@@ -1,37 +1,46 @@
-import { type User, type InsertUser } from "@shared/schema";
 import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import type { Article, InsertArticle } from "@shared/schema";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getAllArticles(): Promise<Article[]>;
+  getArticle(id: number): Promise<Article | undefined>;
+  createArticle(article: InsertArticle): Promise<Article>;
+  deleteArticle(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private articles: Map<number, Article>;
+  private nextId: number;
 
   constructor() {
-    this.users = new Map();
+    this.articles = new Map();
+    this.nextId = 1;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+  async getAllArticles(): Promise<Article[]> {
+    const articles = Array.from(this.articles.values());
+    return articles.sort((a, b) => 
+      new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime()
     );
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getArticle(id: number): Promise<Article | undefined> {
+    return this.articles.get(id);
+  }
+
+  async createArticle(insertArticle: InsertArticle): Promise<Article> {
+    const id = this.nextId++;
+    const article: Article = {
+      ...insertArticle,
+      id,
+      generatedAt: new Date(),
+    };
+    this.articles.set(id, article);
+    return article;
+  }
+
+  async deleteArticle(id: number): Promise<void> {
+    this.articles.delete(id);
   }
 }
 
