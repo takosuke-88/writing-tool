@@ -1,4 +1,6 @@
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { articles } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 import type { Article, InsertArticle } from "@shared/schema";
 
 export interface IStorage {
@@ -8,40 +10,24 @@ export interface IStorage {
   deleteArticle(id: number): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private articles: Map<number, Article>;
-  private nextId: number;
-
-  constructor() {
-    this.articles = new Map();
-    this.nextId = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   async getAllArticles(): Promise<Article[]> {
-    const articles = Array.from(this.articles.values());
-    return articles.sort((a, b) => 
-      new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime()
-    );
+    return await db.select().from(articles).orderBy(desc(articles.generatedAt));
   }
 
   async getArticle(id: number): Promise<Article | undefined> {
-    return this.articles.get(id);
+    const result = await db.select().from(articles).where(eq(articles.id, id));
+    return result[0];
   }
 
   async createArticle(insertArticle: InsertArticle): Promise<Article> {
-    const id = this.nextId++;
-    const article: Article = {
-      ...insertArticle,
-      id,
-      generatedAt: new Date(),
-    };
-    this.articles.set(id, article);
-    return article;
+    const result = await db.insert(articles).values(insertArticle).returning();
+    return result[0];
   }
 
   async deleteArticle(id: number): Promise<void> {
-    this.articles.delete(id);
+    await db.delete(articles).where(eq(articles.id, id));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
