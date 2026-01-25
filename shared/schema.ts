@@ -36,7 +36,7 @@ export type Article = typeof articles.$inferSelect;
 
 export const generateArticleRequestSchema = z.object({
   prompt: z.string().min(1, "入力テキストは必須です"),
-  targetLength: z.number().min(500).max(2000).default(800),
+  targetLength: z.number().min(1).max(9999).default(1000),
 });
 
 export type GenerateArticleRequest = z.infer<typeof generateArticleRequestSchema>;
