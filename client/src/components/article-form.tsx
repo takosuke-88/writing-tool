@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Sparkles, X } from "lucide-react";
+
+const FORM_STORAGE_KEY = "seo-generator-form";
 
 interface ArticleFormProps {
   onGenerate: (prompt: string, targetLength: number) => void;
@@ -12,8 +14,32 @@ interface ArticleFormProps {
 }
 
 export function ArticleForm({ onGenerate, onCancel, isGenerating }: ArticleFormProps) {
-  const [prompt, setPrompt] = useState("");
-  const [targetLength, setTargetLength] = useState(1000);
+  const [prompt, setPrompt] = useState(() => {
+    const saved = localStorage.getItem(FORM_STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved).prompt || "";
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  });
+  const [targetLength, setTargetLength] = useState(() => {
+    const saved = localStorage.getItem(FORM_STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved).targetLength || 1000;
+      } catch {
+        return 1000;
+      }
+    }
+    return 1000;
+  });
+
+  useEffect(() => {
+    localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify({ prompt, targetLength }));
+  }, [prompt, targetLength]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +89,7 @@ export function ArticleForm({ onGenerate, onCancel, isGenerating }: ArticleFormP
                 className="w-32"
                 data-testid="input-target-length"
               />
-              <span className="text-sm text-muted-foreground">文字</span>
+              <span className="text-sm text-muted-foreground">文字前後</span>
             </div>
           </div>
 

@@ -12,11 +12,31 @@ interface ArticleGeneratorProps {
   onClearSelection: () => void;
 }
 
+const STORAGE_KEY = "seo-generator-current-article";
+
 export function ArticleGenerator({ selectedArticle, onClearSelection }: ArticleGeneratorProps) {
   const { toast } = useToast();
-  const [generatedArticle, setGeneratedArticle] = useState<GenerateArticleResponse | null>(null);
+  const [generatedArticle, setGeneratedArticle] = useState<GenerateArticleResponse | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
   const abortControllerRef = useRef<AbortController | null>(null);
   const isCancelledRef = useRef(false);
+
+  useEffect(() => {
+    if (generatedArticle) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(generatedArticle));
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, [generatedArticle]);
 
   useEffect(() => {
     if (selectedArticle) {
