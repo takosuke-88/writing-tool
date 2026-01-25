@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Sparkles, X } from "lucide-react";
 
@@ -13,7 +13,7 @@ interface ArticleFormProps {
 
 export function ArticleForm({ onGenerate, onCancel, isGenerating }: ArticleFormProps) {
   const [prompt, setPrompt] = useState("");
-  const [targetLength, setTargetLength] = useState(800);
+  const [targetLength, setTargetLength] = useState(1000);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,28 +43,27 @@ export function ArticleForm({ onGenerate, onCancel, isGenerating }: ArticleFormP
             />
           </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-foreground">
-                目標文字数
-              </label>
-              <span className="text-sm font-semibold text-primary px-2 py-1 bg-primary/10 rounded-md" data-testid="text-target-length">
-                {targetLength}文字
-              </span>
-            </div>
-            <Slider
-              value={[targetLength]}
-              onValueChange={(value) => setTargetLength(value[0])}
-              min={500}
-              max={2000}
-              step={100}
-              disabled={isGenerating}
-              className="w-full"
-              data-testid="slider-target-length"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>500文字</span>
-              <span>2000文字</span>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              目標文字数
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={targetLength}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  if (!isNaN(value) && value >= 0 && value <= 9999) {
+                    setTargetLength(value);
+                  }
+                }}
+                min={1}
+                max={9999}
+                disabled={isGenerating}
+                className="w-32"
+                data-testid="input-target-length"
+              />
+              <span className="text-sm text-muted-foreground">文字</span>
             </div>
           </div>
 
