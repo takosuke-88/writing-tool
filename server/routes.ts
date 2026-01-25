@@ -28,7 +28,8 @@ export async function registerRoutes(
       const { prompt, targetLength } = validationResult.data;
 
       const systemPrompt = `あなたはSEOに精通した、人間味あふれるベテランWEBライターです。
-ユーザーの入力（お題または下書き）をもとに、${targetLength}文字前後の記事を作成してください。
+ユーザーの入力（お題または下書き）をもとに、必ず${targetLength}文字以内の記事を作成してください。
+文字数制限は厳守です。絶対に${targetLength}文字を超えないでください。
 
 【執筆スタイル】
 ・自然な日本語（〜だよ、〜だね）で、親しみやすさを重視
