@@ -37,6 +37,7 @@ export type Article = typeof articles.$inferSelect;
 export const generateArticleRequestSchema = z.object({
   prompt: z.string().min(1, "入力テキストは必須です"),
   targetLength: z.number().min(1).max(9999).default(1000),
+  systemPromptId: z.string().optional(),
 });
 
 export type GenerateArticleRequest = z.infer<typeof generateArticleRequestSchema>;
@@ -49,3 +50,20 @@ export const generateArticleResponseSchema = z.object({
 });
 
 export type GenerateArticleResponse = z.infer<typeof generateArticleResponseSchema>;
+
+export const systemPrompts = pgTable("system_prompts", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  promptText: text("prompt_text").notNull(),
+  category: text("category").notNull().default("custom"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
+export type SystemPrompt = typeof systemPrompts.$inferSelect;
