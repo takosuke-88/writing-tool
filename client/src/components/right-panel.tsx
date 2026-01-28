@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -29,15 +30,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Save, RotateCcw, Trash2, Plus } from "lucide-react";
+import { Save, RotateCcw, Trash2, Plus, Settings } from "lucide-react";
 import type { SystemPrompt } from "@shared/schema";
 
-interface SystemPromptPanelProps {
+interface RightPanelProps {
   selectedPromptId: string | null;
   onSelectPrompt: (id: string | null) => void;
 }
 
-export function SystemPromptPanel({ selectedPromptId, onSelectPrompt }: SystemPromptPanelProps) {
+export function RightPanel({ selectedPromptId, onSelectPrompt }: RightPanelProps) {
   const { toast } = useToast();
   const [editedText, setEditedText] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -137,95 +138,104 @@ export function SystemPromptPanel({ selectedPromptId, onSelectPrompt }: SystemPr
   const isModified = selectedPrompt && editedText !== selectedPrompt.promptText;
   const isCustom = selectedPrompt?.category === "custom";
 
-  if (isLoading) {
-    return <div className="p-4 text-sm text-muted-foreground">読み込み中...</div>;
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">テンプレート選択</label>
-        <Select
-          value={selectedPromptId || ""}
-          onValueChange={(value) => onSelectPrompt(value || null)}
-        >
-          <SelectTrigger data-testid="select-template">
-            <SelectValue placeholder="テンプレートを選択" />
-          </SelectTrigger>
-          <SelectContent>
-            {prompts.map((prompt) => (
-              <SelectItem key={prompt.id} value={prompt.id} data-testid={`option-template-${prompt.id}`}>
-                {prompt.name}
-                {prompt.category === "custom" && " (カスタム)"}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="w-80 border-l bg-card flex flex-col h-full">
+      <div className="flex items-center gap-2 px-4 py-3 border-b">
+        <Settings className="h-4 w-4 text-muted-foreground" />
+        <span className="font-medium text-sm">執筆ルール設定</span>
       </div>
 
-      {selectedPrompt && (
-        <>
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">実行するシステムプロンプト</label>
-            <Textarea
-              value={editedText}
-              onChange={(e) => setEditedText(e.target.value)}
-              className="min-h-[300px] text-sm font-mono"
-              placeholder="システムプロンプトを入力..."
-              data-testid="textarea-system-prompt"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSaveDialog(true)}
-              data-testid="button-save-new"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              新規保存
-            </Button>
-
-            {isCustom && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleOverwrite}
-                disabled={!isModified || updateMutation.isPending}
-                data-testid="button-overwrite"
+            <label className="text-sm font-medium text-foreground">テンプレート選択</label>
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground">読み込み中...</div>
+            ) : (
+              <Select
+                value={selectedPromptId || ""}
+                onValueChange={(value) => onSelectPrompt(value || null)}
               >
-                <Save className="h-4 w-4 mr-1" />
-                上書き保存
-              </Button>
-            )}
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              disabled={!isModified}
-              data-testid="button-reset"
-            >
-              <RotateCcw className="h-4 w-4 mr-1" />
-              リセット
-            </Button>
-
-            {isCustom && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDeleteDialog(true)}
-                className="text-destructive hover:text-destructive"
-                data-testid="button-delete-template"
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                削除
-              </Button>
+                <SelectTrigger data-testid="select-template" className="bg-background">
+                  <SelectValue placeholder="テンプレートを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {prompts.map((prompt) => (
+                    <SelectItem key={prompt.id} value={prompt.id} data-testid={`option-template-${prompt.id}`}>
+                      {prompt.name}
+                      {prompt.category === "custom" && " (カスタム)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
-        </>
-      )}
+
+          {selectedPrompt && (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">実行するシステムプロンプト</label>
+                <Textarea
+                  value={editedText}
+                  onChange={(e) => setEditedText(e.target.value)}
+                  className="min-h-[400px] text-sm font-mono bg-background text-foreground"
+                  placeholder="システムプロンプトを入力..."
+                  data-testid="textarea-system-prompt"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSaveDialog(true)}
+                  data-testid="button-save-new"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  新規保存
+                </Button>
+
+                {isCustom && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOverwrite}
+                    disabled={!isModified || updateMutation.isPending}
+                    data-testid="button-overwrite"
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    上書き保存
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReset}
+                  disabled={!isModified}
+                  data-testid="button-reset"
+                >
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  リセット
+                </Button>
+
+                {isCustom && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="text-destructive hover:text-destructive"
+                    data-testid="button-delete-template"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    削除
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </ScrollArea>
 
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent>

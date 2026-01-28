@@ -14,18 +14,15 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileText, Trash2, Clock, Hash, PenLine, Settings } from "lucide-react";
-import { SystemPromptPanel } from "@/components/system-prompt-panel";
+import { FileText, Trash2, Clock, Hash, PenLine } from "lucide-react";
 import type { Article } from "@shared/schema";
 
 interface AppSidebarProps {
   selectedArticleId: number | null;
   onSelectArticle: (article: Article) => void;
-  selectedPromptId: string | null;
-  onSelectPrompt: (id: string | null) => void;
 }
 
-export function AppSidebar({ selectedArticleId, onSelectArticle, selectedPromptId, onSelectPrompt }: AppSidebarProps) {
+export function AppSidebar({ selectedArticleId, onSelectArticle }: AppSidebarProps) {
   const { toast } = useToast();
 
   const { data: articles, isLoading } = useQuery<Article[]>({
@@ -65,7 +62,7 @@ export function AppSidebar({ selectedArticleId, onSelectArticle, selectedPromptI
     });
   };
 
-  const truncateTitle = (text: string, maxLength: number = 30) => {
+  const truncateTitle = (text: string, maxLength: number = 25) => {
     if (text.length <= maxLength) return text;
     return text.slice(0, maxLength) + "...";
   };
@@ -80,19 +77,6 @@ export function AppSidebar({ selectedArticleId, onSelectArticle, selectedPromptI
       </SidebarHeader>
       <SidebarContent>
         <ScrollArea className="h-[calc(100vh-80px)]">
-          <SidebarGroup>
-            <SidebarGroupLabel className="flex items-center gap-2 px-4">
-              <Settings className="h-4 w-4" />
-              執筆ルール
-            </SidebarGroupLabel>
-            <SidebarGroupContent className="px-4 py-2">
-              <SystemPromptPanel
-                selectedPromptId={selectedPromptId}
-                onSelectPrompt={onSelectPrompt}
-              />
-            </SidebarGroupContent>
-          </SidebarGroup>
-
           <SidebarGroup>
             <SidebarGroupLabel className="flex items-center gap-2 px-4">
               <FileText className="h-4 w-4" />

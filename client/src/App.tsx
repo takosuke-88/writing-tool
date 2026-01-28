@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { RightPanel } from "@/components/right-panel";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ArticleGenerator } from "@/components/article-generator";
@@ -17,7 +18,7 @@ function AppLayout() {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>("seo-basic");
 
   const style = {
-    "--sidebar-width": "22rem",
+    "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -35,26 +36,30 @@ function AppLayout() {
         <AppSidebar 
           selectedArticleId={selectedArticle?.id ?? null}
           onSelectArticle={handleSelectArticle}
-          selectedPromptId={selectedPromptId}
-          onSelectPrompt={setSelectedPromptId}
         />
-        <SidebarInset className="flex flex-col flex-1">
-          <header className="flex items-center justify-between gap-2 px-4 py-2 border-b bg-background">
+        <SidebarInset className="flex flex-col flex-1 min-w-0">
+          <header className="flex items-center justify-between gap-2 px-4 py-2 border-b bg-background flex-shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <ThemeToggle />
           </header>
-          <main className="flex-1 overflow-hidden">
-            <Switch>
-              <Route path="/">
-                <ArticleGenerator
-                  selectedArticle={selectedArticle}
-                  onClearSelection={handleClearSelection}
-                  selectedPromptId={selectedPromptId}
-                />
-              </Route>
-              <Route component={NotFound} />
-            </Switch>
-          </main>
+          <div className="flex flex-1 overflow-hidden">
+            <main className="flex-1 overflow-hidden min-w-0">
+              <Switch>
+                <Route path="/">
+                  <ArticleGenerator
+                    selectedArticle={selectedArticle}
+                    onClearSelection={handleClearSelection}
+                    selectedPromptId={selectedPromptId}
+                  />
+                </Route>
+                <Route component={NotFound} />
+              </Switch>
+            </main>
+            <RightPanel
+              selectedPromptId={selectedPromptId}
+              onSelectPrompt={setSelectedPromptId}
+            />
+          </div>
         </SidebarInset>
       </div>
     </SidebarProvider>
