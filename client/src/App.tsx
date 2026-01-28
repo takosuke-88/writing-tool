@@ -14,9 +14,10 @@ import type { Article } from "@shared/schema";
 
 function AppLayout() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const [selectedPromptId, setSelectedPromptId] = useState<string | null>("seo-basic");
 
   const style = {
-    "--sidebar-width": "18rem",
+    "--sidebar-width": "22rem",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -34,6 +35,8 @@ function AppLayout() {
         <AppSidebar 
           selectedArticleId={selectedArticle?.id ?? null}
           onSelectArticle={handleSelectArticle}
+          selectedPromptId={selectedPromptId}
+          onSelectPrompt={setSelectedPromptId}
         />
         <SidebarInset className="flex flex-col flex-1">
           <header className="flex items-center justify-between gap-2 px-4 py-2 border-b bg-background">
@@ -46,6 +49,7 @@ function AppLayout() {
                 <ArticleGenerator
                   selectedArticle={selectedArticle}
                   onClearSelection={handleClearSelection}
+                  selectedPromptId={selectedPromptId}
                 />
               </Route>
               <Route component={NotFound} />

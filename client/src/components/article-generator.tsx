@@ -10,11 +10,12 @@ import type { Article, GenerateArticleResponse } from "@shared/schema";
 interface ArticleGeneratorProps {
   selectedArticle: Article | null;
   onClearSelection: () => void;
+  selectedPromptId: string | null;
 }
 
 const STORAGE_KEY = "seo-generator-current-article";
 
-export function ArticleGenerator({ selectedArticle, onClearSelection }: ArticleGeneratorProps) {
+export function ArticleGenerator({ selectedArticle, onClearSelection, selectedPromptId }: ArticleGeneratorProps) {
   const { toast } = useToast();
   const [generatedArticle, setGeneratedArticle] = useState<GenerateArticleResponse | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -45,7 +46,7 @@ export function ArticleGenerator({ selectedArticle, onClearSelection }: ArticleG
   }, [selectedArticle]);
 
   const generateMutation = useMutation({
-    mutationFn: async (data: { prompt: string; targetLength: number }) => {
+    mutationFn: async (data: { prompt: string; targetLength: number; systemPromptId?: string }) => {
       isCancelledRef.current = false;
       abortControllerRef.current = new AbortController();
       const response = await apiRequest<GenerateArticleResponse>(
@@ -91,7 +92,7 @@ export function ArticleGenerator({ selectedArticle, onClearSelection }: ArticleG
     setGeneratedArticle(null);
     onClearSelection();
     isCancelledRef.current = false;
-    generateMutation.mutate({ prompt, targetLength });
+    generateMutation.mutate({ prompt, targetLength, systemPromptId: selectedPromptId || undefined });
   };
 
   const handleCancel = () => {

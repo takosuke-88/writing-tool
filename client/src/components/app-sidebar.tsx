@@ -14,15 +14,18 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileText, Trash2, Clock, Hash, PenLine } from "lucide-react";
+import { FileText, Trash2, Clock, Hash, PenLine, Settings } from "lucide-react";
+import { SystemPromptPanel } from "@/components/system-prompt-panel";
 import type { Article } from "@shared/schema";
 
 interface AppSidebarProps {
   selectedArticleId: number | null;
   onSelectArticle: (article: Article) => void;
+  selectedPromptId: string | null;
+  onSelectPrompt: (id: string | null) => void;
 }
 
-export function AppSidebar({ selectedArticleId, onSelectArticle }: AppSidebarProps) {
+export function AppSidebar({ selectedArticleId, onSelectArticle, selectedPromptId, onSelectPrompt }: AppSidebarProps) {
   const { toast } = useToast();
 
   const { data: articles, isLoading } = useQuery<Article[]>({
@@ -72,17 +75,30 @@ export function AppSidebar({ selectedArticleId, onSelectArticle }: AppSidebarPro
       <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
         <div className="flex items-center gap-2">
           <PenLine className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-sidebar-foreground">SEO Writer</span>
+          <span className="font-semibold text-sidebar-foreground">Writing Tool</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2 px-4">
-            <FileText className="h-4 w-4" />
-            過去の記事
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <ScrollArea className="h-[calc(100vh-140px)]">
+        <ScrollArea className="h-[calc(100vh-80px)]">
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2 px-4">
+              <Settings className="h-4 w-4" />
+              執筆ルール
+            </SidebarGroupLabel>
+            <SidebarGroupContent className="px-4 py-2">
+              <SystemPromptPanel
+                selectedPromptId={selectedPromptId}
+                onSelectPrompt={onSelectPrompt}
+              />
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2 px-4">
+              <FileText className="h-4 w-4" />
+              過去の記事
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
               <SidebarMenu>
                 {isLoading ? (
                   <div className="px-4 py-8 text-center text-sm text-sidebar-foreground/60">
@@ -129,9 +145,9 @@ export function AppSidebar({ selectedArticleId, onSelectArticle }: AppSidebarPro
                   ))
                 )}
               </SidebarMenu>
-            </ScrollArea>
-          </SidebarGroupContent>
-        </SidebarGroup>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </ScrollArea>
       </SidebarContent>
     </Sidebar>
   );
