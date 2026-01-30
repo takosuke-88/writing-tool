@@ -3,9 +3,30 @@ import Anthropic from "@anthropic-ai/sdk";
 import { generateArticleRequestSchema } from "../../shared/schema";
 import { storage } from "../../server/storage";
 
+// 環境変数のデバッグ（本番環境では API キーの中身は表示しない）
+const apiKey =
+  process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ||
+  process.env.ANTHROPIC_API_KEY;
+const baseURL =
+  process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL ||
+  process.env.ANTHROPIC_BASE_URL ||
+  "https://api.anthropic.com";
+
+console.log("[API Debug] Environment check:", {
+  hasApiKey: !!apiKey,
+  apiKeyLength: apiKey?.length || 0,
+  apiKeyPrefix: apiKey?.substring(0, 7) || "none", // "sk-ant-" のみ表示
+  baseURL: baseURL,
+  nodeEnv: process.env.NODE_ENV,
+});
+
+if (!apiKey) {
+  console.error("[API Error] No API key found! Check environment variables.");
+}
+
 const anthropic = new Anthropic({
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+  apiKey: apiKey,
+  baseURL: baseURL,
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -20,6 +41,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // API キーチェック
+    if (!apiKey) {
+      console.error("[API Error] API key is not configured");
+      return res.status(500).json({
+        error: "API キーが設定されていません",
+        details:
+          "環境変数 ANTHROPIC_API_KEY または AI_INTEGRATIONS_ANTHROPIC_API_KEY を設定してください",
+      });
+    }
+
     const validationResult = generateArticleRequestSchema.safeParse(req.body);
 
     if (!validationResult.success) {
@@ -50,6 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    console.log("[API] Calling Claude API...");
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 8192,
@@ -61,6 +93,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ],
       system: systemPromptText,
     });
+
+    console.log("[API] Claude API response received");
 
     const content = message.content[0];
     const articleText = content.type === "text" ? content.text : "";
@@ -82,7 +116,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       id: savedArticle.id,
     });
   } catch (error) {
-    console.error("Article generation error:", error);
+    console.error("[API Error] Article generation error:", error);
+
+    // エラーの詳細をログに出力
+    if (error instanceof Error) {
+      console.error("[API Error] Error name:", error.name);
+      console.error("[API Error] Error message:", error.message);
+      console.error("[API Error] Error stack:", error.stack);
+    }
+
     res.status(500).json({
       error: "記事の生成に失敗しました",
       details: error instanceof Error ? error.message : "Unknown error",
