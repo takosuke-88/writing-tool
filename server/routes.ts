@@ -2,7 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import Anthropic from "@anthropic-ai/sdk";
-import { generateArticleRequestSchema, insertSystemPromptSchema } from "@shared/schema";
+import {
+  generateArticleRequestSchema,
+  insertSystemPromptSchema,
+} from "@shared/schema";
 
 const anthropic = new Anthropic({
   apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
@@ -90,30 +93,36 @@ const DEFAULT_TEMPLATES = [
 ];
 
 async function initializeDefaultTemplates() {
-  const existingPrompts = await storage.getAllSystemPrompts();
-  for (const template of DEFAULT_TEMPLATES) {
-    const exists = existingPrompts.find((p) => p.id === template.id);
-    if (!exists) {
-      await storage.createSystemPrompt(template);
+  try {
+    const existingPrompts = await storage.getAllSystemPrompts();
+    for (const template of DEFAULT_TEMPLATES) {
+      const exists = existingPrompts.find((p) => p.id === template.id);
+      if (!exists) {
+        await storage.createSystemPrompt(template);
+      }
     }
+    console.log("✅ Default templates initialized");
+  } catch (error) {
+    console.warn(
+      "⚠️  Could not initialize default templates (database not available)",
+    );
   }
 }
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
 ): Promise<Server> {
-  
   await initializeDefaultTemplates();
-  
+
   app.post("/api/generate-article", async (req, res) => {
     try {
       const validationResult = generateArticleRequestSchema.safeParse(req.body);
-      
+
       if (!validationResult.success) {
-        return res.status(400).json({ 
-          error: "入力が無効です", 
-          details: validationResult.error.flatten() 
+        return res.status(400).json({
+          error: "入力が無効です",
+          details: validationResult.error.flatten(),
         });
       }
 
@@ -132,7 +141,9 @@ export async function registerRoutes(
       if (systemPromptId) {
         const selectedPrompt = await storage.getSystemPrompt(systemPromptId);
         if (selectedPrompt) {
-          systemPromptText = selectedPrompt.promptText + `\n\n【文字数制限】\n必ず${targetLength}文字以内で作成してください。`;
+          systemPromptText =
+            selectedPrompt.promptText +
+            `\n\n【文字数制限】\n必ず${targetLength}文字以内で作成してください。`;
         }
       }
 
@@ -169,9 +180,9 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Article generation error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "記事の生成に失敗しました",
-        details: error instanceof Error ? error.message : "Unknown error"
+        details: error instanceof Error ? error.message : "Unknown error",
       });
     }
   });
@@ -234,7 +245,9 @@ export async function registerRoutes(
     try {
       const prompt = await storage.getSystemPrompt(req.params.id);
       if (!prompt) {
-        return res.status(404).json({ error: "システムプロンプトが見つかりません" });
+        return res
+          .status(404)
+          .json({ error: "システムプロンプトが見つかりません" });
       }
       res.json(prompt);
     } catch (error) {
@@ -247,9 +260,9 @@ export async function registerRoutes(
     try {
       const validationResult = insertSystemPromptSchema.safeParse(req.body);
       if (!validationResult.success) {
-        return res.status(400).json({ 
-          error: "入力が無効です", 
-          details: validationResult.error.flatten() 
+        return res.status(400).json({
+          error: "入力が無効です",
+          details: validationResult.error.flatten(),
         });
       }
 
@@ -264,9 +277,14 @@ export async function registerRoutes(
   app.put("/api/system-prompts/:id", async (req, res) => {
     try {
       const { name, promptText } = req.body;
-      const prompt = await storage.updateSystemPrompt(req.params.id, { name, promptText });
+      const prompt = await storage.updateSystemPrompt(req.params.id, {
+        name,
+        promptText,
+      });
       if (!prompt) {
-        return res.status(404).json({ error: "システムプロンプトが見つかりません" });
+        return res
+          .status(404)
+          .json({ error: "システムプロンプトが見つかりません" });
       }
       res.json(prompt);
     } catch (error) {
@@ -279,10 +297,14 @@ export async function registerRoutes(
     try {
       const prompt = await storage.getSystemPrompt(req.params.id);
       if (!prompt) {
-        return res.status(404).json({ error: "システムプロンプトが見つかりません" });
+        return res
+          .status(404)
+          .json({ error: "システムプロンプトが見つかりません" });
       }
       if (prompt.category === "default") {
-        return res.status(400).json({ error: "デフォルトテンプレートは削除できません" });
+        return res
+          .status(400)
+          .json({ error: "デフォルトテンプレートは削除できません" });
       }
       await storage.deleteSystemPrompt(req.params.id);
       res.status(204).send();
