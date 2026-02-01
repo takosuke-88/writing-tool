@@ -140,27 +140,70 @@ function ChatApp() {
       handleUpdateTitle(newTitle);
     }
 
-    // Simulate AI response (mock)
+    // Simulate AI response (mock) -> Now real API call
     setIsGenerating(true);
-    setTimeout(() => {
+
+    try {
+      // Prepare context: include current history + new user message
+      const history = messages[selectedConversationId] || [];
+      const apiMessages = [...history, userMessage].map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          model:
+            model === "claude-sonnet-4-5"
+              ? "claude-3-5-sonnet-20240620"
+              : model, // Map internal ID to API model name
+          temperature,
+          maxTokens,
+          topP,
+          systemInstructions,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
       const aiMessage: Message = {
         id: Date.now() + 1,
         conversationId: selectedConversationId,
         role: "assistant",
-        content: `これはモックレスポンスです。\n\nあなたのメッセージ: "${content}"\n\n実際のAPI統合後、Claude APIからの応答がここに表示されます。\n\n## 機能\n\n- Markdownレンダリング\n- コードブロック\n- リスト表示\n\n\`\`\`typescript\nconst example = "code block";\nconsole.log(example);\n\`\`\``,
+        content: data.content,
         createdAt: new Date(),
       };
 
-      setMessages({
-        ...messages,
+      setMessages((prev) => ({
+        ...prev,
         [selectedConversationId]: [
-          ...(messages[selectedConversationId] || []),
+          ...(prev[selectedConversationId] || []),
           userMessage,
           aiMessage,
         ],
+      }));
+    } catch (error) {
+      console.error("Chat error:", error);
+      toast({
+        title: "エラーが発生しました",
+        description: "AIの応答を取得できませんでした。",
+        variant: "destructive",
       });
+
+      // Remove the user message if failed (optional, but good UX to indicate failure)
+      // For now, keeping it but showing error
+    } finally {
       setIsGenerating(false);
-    }, 1500);
+    }
   };
 
   const handleStopGeneration = () => {
