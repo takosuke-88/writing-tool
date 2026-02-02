@@ -1,14 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import Anthropic from "@anthropic-ai/sdk";
 
-// Initialize Anthropic client
 const apiKey =
   process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ||
   process.env.ANTHROPIC_API_KEY;
-
-const anthropic = new Anthropic({
-  apiKey: apiKey,
-});
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Handle CORS preflight
@@ -40,27 +34,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Messages array is required" });
     }
 
+    // Map internal model IDs to actual Anthropic API model names
+    let apiModel = model;
+    if (model === "claude-sonnet-4-5") {
+      apiModel = "claude-3-5-sonnet-20241022"; // Use latest 3.5 Sonnet
+    } else if (!model) {
+      apiModel = "claude-3-5-sonnet-20241022";
+    }
+
     // Convert client messages to Anthropic format
-    // Filter out error messages or empty content if necessary
     const apiMessages = messages.map((msg: any) => ({
       role: msg.role === "user" ? "user" : "assistant",
       content: msg.content,
     }));
 
-    console.log(
-      `[API] Calling Claude (${model}) with ${apiMessages.length} messages`,
-    );
+    console.log(`[API] Calling Claude API (${apiModel}) via fetch...`);
 
-    const response = await anthropic.messages.create({
-      model: model || "claude-3-5-sonnet-20240620", // Default to Sonnet
-      max_tokens: maxTokens || 4096,
-      temperature: (temperature || 70) / 100, // Convert 0-200 to 0.0-2.0
-      top_p: (topP || 100) / 100, // Convert 0-100 to 0.0-1.0
-      system: systemInstructions,
-      messages: apiMessages,
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: apiModel,
+        max_tokens: maxTokens || 4096, // Must be provided
+        temperature: (temperature || 70) / 100,
+        top_p: (topP || 100) / 100,
+        system: systemInstructions,
+        messages: apiMessages,
+      }),
     });
 
-    const content = response.content[0];
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `[API Error] Claude API error (${response.status}):`,
+        errorText,
+      );
+      throw new Error(`Claude API Error: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.content[0];
     const text = content.type === "text" ? content.text : "";
 
     res.json({
