@@ -112,7 +112,7 @@ function ChatApp() {
     });
   };
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     if (!selectedConversationId) return;
 
     // Add user message
