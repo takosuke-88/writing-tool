@@ -175,11 +175,19 @@ function ChatApp() {
 
       const data = await response.json();
 
+      // Debug logging
+      console.log("API Response:", data);
+
+      // Extract text from Anthropic response format
+      const responseText =
+        data.content?.[0]?.text || data.content || "応答を取得できませんでした";
+      console.log("Extracted text:", responseText);
+
       const aiMessage: Message = {
         id: Date.now() + 1,
         conversationId: selectedConversationId,
         role: "assistant",
-        content: data.content,
+        content: responseText,
         createdAt: new Date(),
       };
 
