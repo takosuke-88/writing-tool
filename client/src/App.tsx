@@ -70,6 +70,8 @@ function ChatApp() {
     "chat-system-instructions",
     "",
   );
+  const [isSystemInstructionsOpen, setIsSystemInstructionsOpen] =
+    useLocalStorage<boolean>("chat-system-instructions-open", false);
 
   // Get current conversation
   const currentConversation = conversations.find(
@@ -144,14 +146,10 @@ function ChatApp() {
     });
   };
 
-  const handleUpdateTitle = (title: string) => {
-    if (!selectedConversationId) return;
-
+  const handleUpdateTitle = (id: number, title: string) => {
     setConversations(
       conversations.map((c) =>
-        c.id === selectedConversationId
-          ? { ...c, title, updatedAt: new Date() }
-          : c,
+        c.id === id ? { ...c, title, updatedAt: new Date() } : c,
       ),
     );
 
@@ -185,7 +183,7 @@ function ChatApp() {
     if (currentMessages.length === 0) {
       const newTitle =
         content.slice(0, 30) + (content.length > 30 ? "..." : "");
-      handleUpdateTitle(newTitle);
+      handleUpdateTitle(selectedConversationId, newTitle);
     }
 
     // Simulate AI response (mock) -> Now real API call
@@ -278,6 +276,7 @@ function ChatApp() {
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
+        onUpdateTitle={handleUpdateTitle}
       />
 
       {/* Main Chat Area */}
@@ -286,7 +285,10 @@ function ChatApp() {
         title={currentConversation?.title || "新しい会話"}
         messages={currentMessages}
         onSendMessage={handleSendMessage}
-        onUpdateTitle={handleUpdateTitle}
+        onUpdateTitle={(title) =>
+          selectedConversationId &&
+          handleUpdateTitle(selectedConversationId, title)
+        }
         onStopGeneration={handleStopGeneration}
         isGenerating={isGenerating}
       />
@@ -298,11 +300,13 @@ function ChatApp() {
         maxTokens={maxTokens}
         topP={topP}
         systemInstructions={systemInstructions}
+        isSystemInstructionsOpen={isSystemInstructionsOpen}
         onModelChange={setModel}
         onTemperatureChange={setTemperature}
         onMaxTokensChange={setMaxTokens}
         onTopPChange={setTopP}
         onSystemInstructionsChange={setSystemInstructions}
+        onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
       />
     </div>
   );

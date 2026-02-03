@@ -21,11 +21,13 @@ interface ChatSettingsPanelProps {
   maxTokens: number;
   topP: number; // 0-100 (represents 0.0-1.0)
   systemInstructions: string;
+  isSystemInstructionsOpen: boolean;
   onModelChange: (model: string) => void;
   onTemperatureChange: (temp: number) => void;
   onMaxTokensChange: (tokens: number) => void;
   onTopPChange: (topP: number) => void;
   onSystemInstructionsChange: (instructions: string) => void;
+  onSystemInstructionsOpenChange: (open: boolean) => void;
 }
 
 const MODELS = [
@@ -45,14 +47,14 @@ export function ChatSettingsPanel({
   maxTokens,
   topP,
   systemInstructions,
+  isSystemInstructionsOpen,
   onModelChange,
   onTemperatureChange,
   onMaxTokensChange,
   onTopPChange,
   onSystemInstructionsChange,
+  onSystemInstructionsOpenChange,
 }: ChatSettingsPanelProps) {
-  const [isSystemInstructionsOpen, setIsSystemInstructionsOpen] =
-    useState(false);
   const selectedModel = MODELS.find((m) => m.id === model);
 
   return (
@@ -97,7 +99,7 @@ export function ChatSettingsPanel({
               variant="ghost"
               className="w-full justify-between p-0 h-auto hover:bg-transparent"
               onClick={() =>
-                setIsSystemInstructionsOpen(!isSystemInstructionsOpen)
+                onSystemInstructionsOpenChange(!isSystemInstructionsOpen)
               }
             >
               <Label className="text-sm font-medium text-[#202124] cursor-pointer">

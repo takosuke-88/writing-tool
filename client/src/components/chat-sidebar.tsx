@@ -11,6 +11,7 @@ interface ChatSidebarProps {
   onSelectConversation: (conversation: Conversation) => void;
   onNewConversation: () => void;
   onDeleteConversation: (id: number) => void;
+  onUpdateTitle: (id: number, title: string) => void;
 }
 
 export function ChatSidebar({
@@ -19,7 +20,10 @@ export function ChatSidebar({
   onSelectConversation,
   onNewConversation,
   onDeleteConversation,
+  onUpdateTitle,
 }: ChatSidebarProps) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
   const formatDate = (date: Date) => {
     const now = new Date();
     const diffMs = now.getTime() - new Date(date).getTime();
@@ -80,9 +84,43 @@ export function ChatSidebar({
               >
                 <MessageSquare className="h-4 w-4 text-[#5f6368] flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[#202124] truncate font-medium">
-                    {conversation.title}
-                  </p>
+                  {editingId === conversation.id ? (
+                    <input
+                      type="text"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onBlur={() => {
+                        if (editingTitle.trim()) {
+                          onUpdateTitle(conversation.id, editingTitle.trim());
+                        }
+                        setEditingId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          if (editingTitle.trim()) {
+                            onUpdateTitle(conversation.id, editingTitle.trim());
+                          }
+                          setEditingId(null);
+                        } else if (e.key === "Escape") {
+                          setEditingId(null);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                      className="text-sm text-[#202124] font-medium bg-white border border-[#1a73e8] rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 outline-none w-full"
+                    />
+                  ) : (
+                    <p
+                      className="text-sm text-[#202124] truncate font-medium cursor-text"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(conversation.id);
+                        setEditingTitle(conversation.title);
+                      }}
+                    >
+                      {conversation.title}
+                    </p>
+                  )}
                   <p className="text-xs text-[#5f6368] mt-0.5">
                     {formatDate(conversation.updatedAt)}
                   </p>
