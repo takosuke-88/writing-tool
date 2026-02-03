@@ -5,6 +5,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Debug: Check if API key exists
+    console.log("API Key:", process.env.ANTHROPIC_API_KEY ? "存在" : "なし");
+    console.log("API Key length:", process.env.ANTHROPIC_API_KEY?.length || 0);
+
     // Extract parameters from request body
     const {
       messages,
@@ -30,9 +34,11 @@ export default async function handler(req, res) {
       requestBody.temperature = temperature / 100; // Convert 0-200 to 0.0-2.0
     }
 
-    if (topP !== undefined) {
-      requestBody.top_p = topP / 100; // Convert 0-100 to 0.0-1.0
-    }
+    // Note: Claude API does not allow both temperature and top_p
+    // We only use temperature for now
+    // if (topP !== undefined) {
+    //   requestBody.top_p = topP / 100; // Convert 0-100 to 0.0-1.0
+    // }
 
     if (systemInstructions) {
       requestBody.system = systemInstructions;
@@ -44,7 +50,24 @@ export default async function handler(req, res) {
       temperature: requestBody.temperature,
       top_p: requestBody.top_p,
       hasSystem: !!systemInstructions,
+      messagesCount: messages?.length || 0,
     });
+
+    // Debug: Log the full request body (without sensitive data)
+    console.log(
+      "[API] Full request body:",
+      JSON.stringify(
+        {
+          ...requestBody,
+          messages: messages?.map((m) => ({
+            role: m.role,
+            contentLength: m.content?.length,
+          })),
+        },
+        null,
+        2,
+      ),
+    );
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
