@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,20 +11,65 @@ import { useToast } from "@/hooks/use-toast";
 import { getAllMockConversations, mockMessages } from "@/lib/mockData";
 import type { Conversation, Message } from "@shared/schema";
 
+// Custom JSON reviver to restore Date objects from localStorage
+function dateReviver(key: string, value: any) {
+  if (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)
+  ) {
+    return new Date(value);
+  }
+  return value;
+}
+
+// Custom hook for localStorage persistence
+function useLocalStorage<T>(
+  key: string,
+  initialValue: T,
+): [T, React.Dispatch<React.SetStateAction<T>>] {
+  // Read from localStorage on mount
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item, dateReviver) : initialValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
+  });
+
+  // Save to localStorage whenever value changes
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(storedValue));
+    } catch (error) {
+      console.error(`Error saving localStorage key "${key}":`, error);
+    }
+  }, [key, storedValue]);
+
+  return [storedValue, setStoredValue];
+}
+
 function ChatApp() {
   const { toast } = useToast();
 
-  // State
-  const [conversations, setConversations] = useState<Conversation[]>(
+  // State with localStorage persistence
+  const [conversations, setConversations] = useLocalStorage<Conversation[]>(
+    "chat-conversations",
     getAllMockConversations(),
   );
-  const [selectedConversationId, setSelectedConversationId] = useState<
+  const [selectedConversationId, setSelectedConversationId] = useLocalStorage<
     number | null
-  >(1);
-  const [messages, setMessages] =
-    useState<Record<number, Message[]>>(mockMessages);
+  >("chat-selected-id", 1);
+  const [messages, setMessages] = useLocalStorage<Record<number, Message[]>>(
+    "chat-messages",
+    mockMessages,
+  );
   const [isGenerating, setIsGenerating] = useState(false);
-  const [systemInstructions, setSystemInstructions] = useState("");
+  const [systemInstructions, setSystemInstructions] = useLocalStorage<string>(
+    "chat-system-instructions",
+    "",
+  );
 
   // Get current conversation
   const currentConversation = conversations.find(
