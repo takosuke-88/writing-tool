@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     } = req.body;
 
     // Map model name if needed
-    const apiModel = model || "claude-sonnet-4-5-20250926"; // Fallback to a known model if needed
+    const apiModel = model || "claude-sonnet-4-5-20250929"; // Claude 4.5 Sonnet latest
 
     // Build request body
     const requestBody = {
