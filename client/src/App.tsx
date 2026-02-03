@@ -160,7 +160,7 @@ function ChatApp() {
           messages: apiMessages,
           model:
             model === "claude-sonnet-4-5"
-              ? "claude-3-5-sonnet-20240620"
+              ? "claude-sonnet-4-5-20250929"
               : model, // Map internal ID to API model name
           temperature,
           maxTokens,
