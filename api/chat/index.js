@@ -1,6 +1,9 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+export default async function handler(req, res) {
+  // Only allow POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Extract parameters from request body
     const {
@@ -16,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const apiModel = model || "claude-sonnet-4-5-20250929";
 
     // Build request body
-    const requestBody: any = {
+    const requestBody = {
       model: apiModel,
       max_tokens: maxTokens || 2048,
       messages: messages,
@@ -46,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY as string,
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
@@ -61,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const data = await response.json();
     res.status(200).json(data);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Server Error:", error);
     res.status(500).json({ error: error.message });
   }
