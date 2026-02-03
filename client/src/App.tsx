@@ -79,17 +79,20 @@ function ChatApp() {
     ? messages[selectedConversationId] || []
     : [];
 
-  // Settings state (from current conversation or defaults)
-  const [model, setModel] = useState(
-    currentConversation?.model || "claude-sonnet-4-5",
+  // Settings state with localStorage persistence
+  const [model, setModel] = useLocalStorage<string>(
+    "chat-model",
+    "claude-sonnet-4-5",
   );
-  const [temperature, setTemperature] = useState(
-    currentConversation?.temperature || 70,
+  const [temperature, setTemperature] = useLocalStorage<number>(
+    "chat-temperature",
+    70,
   );
-  const [maxTokens, setMaxTokens] = useState(
-    currentConversation?.maxTokens || 4096,
+  const [maxTokens, setMaxTokens] = useLocalStorage<number>(
+    "chat-max-tokens",
+    4096,
   );
-  const [topP, setTopP] = useState(currentConversation?.topP || 100);
+  const [topP, setTopP] = useLocalStorage<number>("chat-top-p", 100);
 
   // Handlers
   const handleNewConversation = () => {
@@ -240,7 +243,7 @@ function ChatApp() {
         ...prev,
         [selectedConversationId]: [
           ...(prev[selectedConversationId] || []),
-          userMessage,
+          // userMessage already added before API call (line 172-178)
           aiMessage,
         ],
       }));
