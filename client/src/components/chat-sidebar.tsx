@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Menu, Plus, Settings, MessageSquare, Trash2 } from "lucide-react";
+import {
+  Menu,
+  Plus,
+  Settings,
+  MessageSquare,
+  Trash2,
+  Edit2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Conversation } from "@shared/schema";
@@ -110,16 +117,23 @@ export function ChatSidebar({
                       className="text-sm text-[#202124] font-medium bg-white border border-[#1a73e8] rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 outline-none w-full"
                     />
                   ) : (
-                    <p
-                      className="text-sm text-[#202124] truncate font-medium cursor-text"
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        setEditingId(conversation.id);
-                        setEditingTitle(conversation.title);
-                      }}
-                    >
-                      {conversation.title}
-                    </p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm text-[#202124] truncate font-medium flex-1">
+                        {conversation.title}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 h-5 w-5 text-[#5f6368] hover:text-[#1a73e8] hover:bg-[#e8f0fe] flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(conversation.id);
+                          setEditingTitle(conversation.title);
+                        }}
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   )}
                   <p className="text-xs text-[#5f6368] mt-0.5">
                     {formatDate(conversation.updatedAt)}
