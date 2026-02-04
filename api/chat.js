@@ -39,18 +39,29 @@ export default async function handler(req, res) {
       apiUrl = "https://api.perplexity.ai/chat/completions";
       headers["Authorization"] = `Bearer ${process.env.PERPLEXITY_API_KEY}`;
 
-      // Convert messages to OpenAI format (role: 'system' for instructions)
-      const completionMessages = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Simplify messages for Perplexity to avoid "user or tool message(s) should alternate" error
+      // Only send system instructions + the last user message
+      const lastUserMessage = messages[messages.length - 1];
+      const completionMessages = [];
 
       if (systemInstructions) {
-        completionMessages.unshift({
+        completionMessages.push({
           role: "system",
           content: systemInstructions,
         });
       }
+
+      if (lastUserMessage) {
+        completionMessages.push({
+          role: lastUserMessage.role, // Should be "user"
+          content: lastUserMessage.content,
+        });
+      }
+
+      console.log(
+        "[Perplexity] Formatted messages:",
+        JSON.stringify(completionMessages, null, 2),
+      );
 
       body = {
         model: "sonar-pro",
