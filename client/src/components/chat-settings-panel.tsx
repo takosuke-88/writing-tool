@@ -38,7 +38,11 @@ const MODELS = [
     name: "Gemini 3 Pro Preview",
     available: false,
   },
-  { id: "perplexity", name: "Perplexity", available: false },
+  {
+    id: "llama-3.1-sonar-small-128k-online",
+    name: "Perplexity (Online)",
+    available: true,
+  },
 ];
 
 export function ChatSettingsPanel({

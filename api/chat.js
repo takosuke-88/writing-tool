@@ -6,8 +6,15 @@ export default async function handler(req, res) {
 
   try {
     // Debug: Check if API key exists
-    console.log("API Key:", process.env.ANTHROPIC_API_KEY ? "存在" : "なし");
-    console.log("API Key length:", process.env.ANTHROPIC_API_KEY?.length || 0);
+    // Debug: Check if API key exists
+    console.log(
+      "Claude API Key:",
+      process.env.ANTHROPIC_API_KEY ? "存在" : "なし",
+    );
+    console.log(
+      "Perplexity API Key:",
+      process.env.PERPLEXITY_API_KEY ? "存在" : "なし",
+    );
 
     // Extract parameters from request body
     const {
@@ -19,64 +26,75 @@ export default async function handler(req, res) {
       systemInstructions,
     } = req.body;
 
-    // Map model name if needed
-    const apiModel = model || "claude-sonnet-4-5-20250929"; // Claude 4.5 Sonnet latest
-
-    // Build request body
-    const requestBody = {
-      model: apiModel,
-      max_tokens: maxTokens || 2048,
-      messages: messages,
+    // Determine API provider and configuration
+    let apiUrl = "https://api.anthropic.com/v1/messages";
+    let headers = {
+      "content-type": "application/json",
     };
+    let body = {};
 
-    // Add optional parameters if provided
-    if (temperature !== undefined) {
-      requestBody.temperature = temperature / 100; // Convert 0-200 to 0.0-2.0
+    const isPerplexity = model === "llama-3.1-sonar-small-128k-online";
+
+    if (isPerplexity) {
+      apiUrl = "https://api.perplexity.ai/chat/completions";
+      headers["Authorization"] = `Bearer ${process.env.PERPLEXITY_API_KEY}`;
+
+      // Convert messages to OpenAI format (role: 'system' for instructions)
+      const completionMessages = messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      if (systemInstructions) {
+        completionMessages.unshift({
+          role: "system",
+          content: systemInstructions,
+        });
+      }
+
+      body = {
+        model: "llama-3.1-sonar-small-128k-online",
+        messages: completionMessages,
+        temperature: temperature !== undefined ? temperature / 100 : 0.7,
+        max_tokens: maxTokens || 2048,
+        top_p: topP !== undefined ? topP / 100 : 1,
+        return_citations: false,
+        return_images: false,
+        return_related_questions: false,
+      };
+    } else {
+      // Default to Claude API
+      headers["x-api-key"] = process.env.ANTHROPIC_API_KEY;
+      headers["anthropic-version"] = "2023-06-01";
+
+      const apiModel = model || "claude-sonnet-4-5-20250929";
+
+      body = {
+        model: apiModel,
+        max_tokens: maxTokens || 2048,
+        messages: messages,
+      };
+
+      if (temperature !== undefined) {
+        body.temperature = temperature / 100;
+      }
+
+      if (systemInstructions) {
+        body.system = systemInstructions;
+      }
     }
 
-    // Note: Claude API does not allow both temperature and top_p
-    // We only use temperature for now
-    // if (topP !== undefined) {
-    //   requestBody.top_p = topP / 100; // Convert 0-100 to 0.0-1.0
-    // }
-
-    if (systemInstructions) {
-      requestBody.system = systemInstructions;
-    }
-
-    console.log("[API] Calling Claude with:", {
-      model: apiModel,
-      max_tokens: requestBody.max_tokens,
-      temperature: requestBody.temperature,
-      top_p: requestBody.top_p,
-      hasSystem: !!systemInstructions,
-      messagesCount: messages?.length || 0,
-    });
-
-    // Debug: Log the full request body (without sensitive data)
     console.log(
-      "[API] Full request body:",
-      JSON.stringify(
-        {
-          ...requestBody,
-          messages: messages?.map((m) => ({
-            role: m.role,
-            contentLength: m.content?.length,
-          })),
-        },
-        null,
-        2,
-      ),
+      "[API] Calling Provider:",
+      isPerplexity ? "Perplexity" : "Anthropic",
+      "with model:",
+      isPerplexity ? body.model : body.model,
     );
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
+      headers: headers,
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -86,6 +104,18 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+
+    // Normalize response to maintain compatibility with client
+    // Client expects: { content: [ { text: "..." } ] } or { content: "..." }
+    if (isPerplexity) {
+      // Perplexity (OpenAI format): choices[0].message.content
+      const content = data.choices?.[0]?.message?.content || "";
+      return res.status(200).json({
+        content: [{ text: content }],
+      });
+    }
+
+    // Anthropic format is already compatible
     return res.status(200).json(data);
   } catch (error) {
     console.error("Server Error:", error);
