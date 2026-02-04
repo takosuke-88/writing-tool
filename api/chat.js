@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     };
     let body = {};
 
-    const isPerplexity = model === "llama-3.1-sonar-small-128k-online";
+    const isPerplexity = model === "sonar-pro";
 
     if (isPerplexity) {
       apiUrl = "https://api.perplexity.ai/chat/completions";
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       }
 
       body = {
-        model: "llama-3.1-sonar-small-128k-online",
+        model: "sonar-pro",
         messages: completionMessages,
         temperature: temperature !== undefined ? temperature / 100 : 0.7,
         max_tokens: maxTokens || 2048,
