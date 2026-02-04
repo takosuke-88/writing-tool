@@ -15,6 +15,10 @@ export default async function handler(req, res) {
       "Perplexity API Key:",
       process.env.PERPLEXITY_API_KEY ? "存在" : "なし",
     );
+    console.log(
+      "Gemini API Key:",
+      process.env.GEMINI_API_KEY ? "存在" : "なし",
+    );
 
     // Extract parameters from request body
     const {
@@ -73,6 +77,30 @@ export default async function handler(req, res) {
         return_images: false,
         return_related_questions: false,
       };
+    } else if (model === "gemini-2.0-flash") {
+      // Gemini API
+      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
+      // Gemini expects: { contents: [ { role: "user"|"model", parts: [{ text: "..." }] } ], systemInstruction: ... }
+      const geminiContents = messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      body = {
+        contents: geminiContents,
+        generationConfig: {
+          temperature: temperature !== undefined ? temperature / 100 : 0.7,
+          maxOutputTokens: maxTokens || 2048,
+          topP: topP !== undefined ? topP / 100 : 0.95,
+        },
+      };
+
+      if (systemInstructions) {
+        body.systemInstruction = {
+          parts: [{ text: systemInstructions }],
+        };
+      }
     } else {
       // Default to Claude API
       headers["x-api-key"] = process.env.ANTHROPIC_API_KEY;
@@ -97,7 +125,11 @@ export default async function handler(req, res) {
 
     console.log(
       "[API] Calling Provider:",
-      isPerplexity ? "Perplexity" : "Anthropic",
+      model === "gemini-2.0-flash"
+        ? "Gemini"
+        : isPerplexity
+          ? "Perplexity"
+          : "Anthropic",
       "with model:",
       isPerplexity ? body.model : body.model,
     );
@@ -123,6 +155,13 @@ export default async function handler(req, res) {
       const content = data.choices?.[0]?.message?.content || "";
       return res.status(200).json({
         content: [{ text: content }],
+      });
+    }
+
+    if (model === "gemini-2.0-flash") {
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      return res.status(200).json({
+        content: [{ text: text }],
       });
     }
 
