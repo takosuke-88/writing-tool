@@ -33,6 +33,11 @@ interface ChatSettingsPanelProps {
 const MODELS = [
   { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
   {
+    id: "gemini-2.5-flash",
+    name: "Gemini 2.5 Flash (Stable)",
+    available: true,
+  },
+  {
     id: "gemini-3-flash-preview",
     name: "Gemini 3 Flash Preview",
     available: true,

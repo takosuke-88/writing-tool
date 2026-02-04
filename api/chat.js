@@ -77,9 +77,16 @@ export default async function handler(req, res) {
         return_images: false,
         return_related_questions: false,
       };
-    } else if (model === "gemini-3-flash-preview") {
+    } else if (
+      model === "gemini-3-flash-preview" ||
+      model === "gemini-2.5-flash"
+    ) {
       // Gemini API
-      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      const geminiModel =
+        model === "gemini-2.5-flash"
+          ? "gemini-2.5-flash"
+          : "gemini-3-flash-preview";
+      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
       // Gemini expects: { contents: [ { role: "user"|"model", parts: [{ text: "..." }] } ], systemInstruction: ... }
       const geminiContents = messages.map((m) => ({
@@ -101,6 +108,8 @@ export default async function handler(req, res) {
           parts: [{ text: systemInstructions }],
         };
       }
+
+      console.log("[Gemini] Request body:", JSON.stringify(body, null, 2));
     } else {
       // Default to Claude API
       headers["x-api-key"] = process.env.ANTHROPIC_API_KEY;
@@ -125,13 +134,13 @@ export default async function handler(req, res) {
 
     console.log(
       "[API] Calling Provider:",
-      model === "gemini-3-flash-preview"
+      model === "gemini-3-flash-preview" || model === "gemini-2.5-flash"
         ? "Gemini"
         : isPerplexity
           ? "Perplexity"
           : "Anthropic",
       "with model:",
-      isPerplexity ? body.model : body.model,
+      model,
     );
 
     const response = await fetch(apiUrl, {
@@ -141,6 +150,16 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
+      // Handle 503 service unavailable error
+      if (response.status === 503) {
+        const errorText = await response.text();
+        console.error("API Service Unavailable (503):", model, errorText);
+        return res.status(503).json({
+          error:
+            "APIサービスが一時的に利用できません。数秒後に再試行してください。",
+        });
+      }
+
       // Handle 429 quota exceeded error
       if (response.status === 429) {
         console.error("API Rate Limit Error (429):", model);
@@ -166,7 +185,7 @@ export default async function handler(req, res) {
       });
     }
 
-    if (model === "gemini-3-flash-preview") {
+    if (model === "gemini-3-flash-preview" || model === "gemini-2.5-flash") {
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       return res.status(200).json({
         content: [{ text: text }],
