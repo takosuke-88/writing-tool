@@ -77,9 +77,9 @@ export default async function handler(req, res) {
         return_images: false,
         return_related_questions: false,
       };
-    } else if (model === "gemini-2.0-flash") {
+    } else if (model === "gemini-3-flash-preview") {
       // Gemini API
-      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
       // Gemini expects: { contents: [ { role: "user"|"model", parts: [{ text: "..." }] } ], systemInstruction: ... }
       const geminiContents = messages.map((m) => ({
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
 
     console.log(
       "[API] Calling Provider:",
-      model === "gemini-2.0-flash"
+      model === "gemini-3-flash-preview"
         ? "Gemini"
         : isPerplexity
           ? "Perplexity"
@@ -141,8 +141,16 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
+      // Handle 429 quota exceeded error
+      if (response.status === 429) {
+        console.error("API Rate Limit Error (429):", model);
+        return res.status(429).json({
+          error: "API制限に達しました。しばらく待ってから再試行してください。",
+        });
+      }
+
       const error = await response.json();
-      console.error("Claude API Error:", error);
+      console.error("API Error:", error);
       return res.status(response.status).json(error);
     }
 
@@ -158,7 +166,7 @@ export default async function handler(req, res) {
       });
     }
 
-    if (model === "gemini-2.0-flash") {
+    if (model === "gemini-3-flash-preview") {
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       return res.status(200).json({
         content: [{ text: text }],
