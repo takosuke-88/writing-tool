@@ -6,6 +6,7 @@ import {
   generateArticleRequestSchema,
   insertSystemPromptSchema,
 } from "@shared/schema";
+import chatHandler from "../api/chat.js";
 
 const anthropic = new Anthropic({
   apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
@@ -356,19 +357,9 @@ export async function registerRoutes(
   // We do not implement it here to avoid PostgreSQL dependencies for stats.
 
   // Register /api/chat for local development
-  // We dynamically import properly to handle the .js module
-  app.post("/api/chat", async (req, res) => {
-    try {
-      // Dynamic import of the JS module
-      // Using path relative to this file (server/routes.ts -> ../api/chat.js)
-      // @ts-ignore
-      const { default: chatHandler } = await import("../api/chat.js");
-      await chatHandler(req, res);
-    } catch (error) {
-      console.error("Local /api/chat error:", error);
-      res.status(500).json({ error: "Local chat handler failed" });
-    }
-  });
+  // Direct import for proper hot module replacement
+  // @ts-ignore - JS module without type declarations
+  app.post("/api/chat", chatHandler);
 
   return httpServer;
 }

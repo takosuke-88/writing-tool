@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { kv } from "@vercel/kv";
 
 // Initialize Anthropic Client
@@ -380,26 +381,57 @@ async function streamPerplexity(
   }
 }
 
-// --- Gemini Streaming Handler ---
-async function streamGemini(res, model, messages, maxTokens, systemInstructions, temperature, topP) {
-  // Gemini API format is different (contents: [{ role: ..., parts: [{text: ...}] }])
-  // And streaming endpoint is streamGenerateContent
+// --- Gemini Streaming Handler (REST API-based to avoid SDK encoding issues) ---
+async function streamGemini(
+  res,
+  model,
+  messages,
+  maxTokens,
+  systemInstructions,
+  temperature,
+  topP,
+) {
+  console.log("[DEBUG Gemini] Stream starting:", {
+    model,
+    messagesCount: messages.length,
+    maxTokens,
+    temperature,
+    topP,
+    hasSystemInstructions: !!systemInstructions,
+  });
+
+  // Set SSE headers
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
   try {
     res.write(`data: ${JSON.stringify({ type: "model_selected", model })}\n\n`);
 
-    if (!process.env.AI_INTEGRATIONS_GOOGLE_API_KEY) {
+    const apiKey = process.env.AI_INTEGRATIONS_GOOGLE_API_KEY;
+    if (!apiKey) {
       throw new Error("Gemini API Key missing");
     }
 
-    // Convert messages to Gemini format
-    const geminiContents = messages.map((msg) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
-    }));
+    // Get the last user message
+    const lastUserMessage = messages[messages.length - 1];
+    if (!lastUserMessage || lastUserMessage.role !== "user") {
+      throw new Error("No user message found");
+    }
 
-    // Build request body
+    // Build the request body
     const requestBody = {
-      contents: geminiContents,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: lastUserMessage.content }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: maxTokens || 2048,
+        temperature: temperature ? temperature / 100 : 0.7,
+        topP: topP ? topP / 100 : 0.8,
+      },
     };
 
     // Add system instructions if provided
@@ -409,70 +441,83 @@ async function streamGemini(res, model, messages, maxTokens, systemInstructions,
       };
     }
 
-    // Add generation config
-    requestBody.generationConfig = {
-      ...(maxTokens && { maxOutputTokens: maxTokens }),
-      ...(temperature && { temperature: temperature / 100 }),
-      ...(topP && { topP: topP / 100 }),
-    };
+    console.log("[DEBUG Gemini] Request body prepared");
 
-    // Use streaming endpoint
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${process.env.AI_INTEGRATIONS_GOOGLE_API_KEY}`;
+    // Use streamGenerateContent endpoint
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`Gemini API Error: ${response.status} ${errText}`);
-      if (response.status === 429 || response.status === 402 || response.status === 503) {
+      console.error(`[DEBUG Gemini] API Error: ${response.status} ${errText}`);
+      if (response.status === 429 || response.status === 503) {
         throw new Error("GEMINI_QUOTA_EXCEEDED");
       }
-      throw new Error(`Gemini API Error: ${response.status} ${errText}`);
+      throw new Error(`Gemini API Error: ${response.status} - ${errText}`);
     }
 
-    if (!response.body) throw new Error("No response body from Gemini");
+    if (!response.body) {
+      throw new Error("No response body from Gemini");
+    }
 
-    // Stream response
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let done = false;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let chunkCount = 0;
 
     while (!done) {
       const { value, done: readerDone } = await reader.read();
       done = readerDone;
+
       if (value) {
         const chunk = decoder.decode(value, { stream: true });
-        // Gemini streams JSON objects separated by newlines
-        const lines = chunk.split("\n").filter(line => line.trim());
+        const lines = chunk.split("\n");
 
         for (const line of lines) {
-          try {
-            const data = JSON.parse(line);
+          if (line.trim().startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
 
-            // Extract text content
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              res.write(`data: ${JSON.stringify({ type: "content", text })}\n\n`);
-            }
+            try {
+              const data = JSON.parse(dataStr);
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-            // Track usage metadata
-            if (data.usageMetadata) {
-              totalInputTokens = data.usageMetadata.promptTokenCount || 0;
-              totalOutputTokens = data.usageMetadata.candidatesTokenCount || 0;
+              if (text) {
+                chunkCount++;
+                res.write(
+                  `data: ${JSON.stringify({ type: "content", text })}\n\n`,
+                );
+              }
+
+              // Track usage if available
+              if (data.usageMetadata) {
+                totalInputTokens = data.usageMetadata.promptTokenCount || 0;
+                totalOutputTokens =
+                  data.usageMetadata.candidatesTokenCount || 0;
+              }
+            } catch (e) {
+              // Ignore parse errors for partial chunks
+              console.log("[DEBUG Gemini] Parse error for chunk:", e.message);
             }
-          } catch (e) {
-            // Skip invalid JSON lines
-            continue;
           }
         }
       }
     }
+
+    console.log("[DEBUG Gemini] Stream complete:", {
+      totalChunks: chunkCount,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+    });
 
     // Log usage after streaming completes
     if (totalInputTokens > 0 || totalOutputTokens > 0) {
@@ -480,9 +525,21 @@ async function streamGemini(res, model, messages, maxTokens, systemInstructions,
     }
 
     res.write("data: [DONE]\n\n");
-    res.end();
+    console.log("[DEBUG Gemini] Stream ended successfully");
   } catch (error) {
-    if (error.message === "GEMINI_QUOTA_EXCEEDED") {
+    console.error("[DEBUG Gemini] Error caught:", {
+      message: error.message,
+      status: error.status,
+      stack: error.stack,
+    });
+
+    // Check for quota/rate limit errors
+    if (
+      error.message === "GEMINI_QUOTA_EXCEEDED" ||
+      error.status === 429 ||
+      error.status === 503 ||
+      error.message?.includes("quota")
+    ) {
       res.write(
         `data: ${JSON.stringify({
           type: "warning",
@@ -494,12 +551,17 @@ async function streamGemini(res, model, messages, maxTokens, systemInstructions,
         `data: ${JSON.stringify({ type: "error", message: "Geminiの制限に達しました。" })}\n\n`,
       );
     } else {
-      console.error("Gemini Stream Error:", error);
+      console.error("[Gemini Stream Error]", error);
       res.write(
-        `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
+        `data: ${JSON.stringify({ type: "error", message: `Gemini Error: ${error.message || "Unknown error"}` })}\n\n`,
       );
     }
-    res.end();
+  } finally {
+    console.log("[DEBUG Gemini] Finally block - ending response");
+    // Ensure response is always ended
+    if (!res.writableEnded) {
+      res.end();
+    }
   }
 }
 
@@ -542,7 +604,15 @@ export default async function handler(req, res) {
     }
 
     if (model.includes("gemini")) {
-      return await streamGemini(res, model, messages, maxTokens, systemInstructions, temperature, topP);
+      return await streamGemini(
+        res,
+        model,
+        messages,
+        maxTokens,
+        systemInstructions,
+        temperature,
+        topP,
+      );
     }
 
     // --- ANTHROPIC (DEFAULT) ---
