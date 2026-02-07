@@ -1,0 +1,27 @@
+﻿node.exe : 笞・・ Datab
+ase not available. Ru
+nning in mock data mo
+de.
+発生場所 行:1 文字:1
++ & "C:\Program Files
+\nodejs/node.exe" "C:
+\Program Files\nodejs
+/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (笞・・ Da   
+ tabase n...mock     
+data mode.:Strin    g
+) [], RemoteExc    ep
+tion
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+笞・・Database unavailable, falling back to MemStorage
+笨・Default templates initialized
+12:47:15 PM [express] serving on port 5000

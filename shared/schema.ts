@@ -49,6 +49,7 @@ export const generateArticleRequestSchema = z.object({
   prompt: z.string().min(1, "入力テキストは必須です"),
   targetLength: z.number().min(1).max(9999).default(1000),
   systemPromptId: z.string().optional(),
+  model: z.string().optional().default("claude-sonnet-4-5"),
 });
 
 export type GenerateArticleRequest = z.infer<
@@ -178,3 +179,27 @@ export const conversationWithMessagesSchema = z.object({
 export type ConversationWithMessages = z.infer<
   typeof conversationWithMessagesSchema
 >;
+
+// ============================================
+// API Usage Stats Schema
+// ============================================
+
+export const apiUsageLogs = pgTable("api_usage_logs", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull(), // claude, gemini, perplexity
+  model: text("model").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  cost: integer("cost_nano_usd").notNull().default(0), // Nano USD (1e-9) to avoid floating point issues
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
+export const insertApiUsageLogSchema = createInsertSchema(apiUsageLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ApiUsageLog = typeof apiUsageLogs.$inferSelect;
+export type InsertApiUsageLog = z.infer<typeof insertApiUsageLogSchema>;

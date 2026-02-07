@@ -126,7 +126,13 @@ export async function registerRoutes(
         });
       }
 
-      const { prompt, targetLength, systemPromptId } = validationResult.data;
+      const { prompt, targetLength, systemPromptId, model: requestedModel } = validationResult.data;
+
+      // Normalize model name
+      let model = requestedModel || "claude-sonnet-4-5";
+      if (model === "claude-sonnet-4-5") {
+        model = "claude-sonnet-4-5-20250929";
+      }
 
       let systemPromptText = `あなたはSEOに精通した、人間味あふれるベテランWEBライターです。
 ユーザーの入力（お題または下書き）をもとに、必ず${targetLength}文字以内の記事を作成してください。
@@ -147,22 +153,54 @@ export async function registerRoutes(
         }
       }
 
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
-        max_tokens: 8192,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        system: systemPromptText,
-      });
+      let articleText = "";
 
-      const content = message.content[0];
-      const articleText = content.type === "text" ? content.text : "";
+      // Route to appropriate API based on model
+      if (model.includes("gemini")) {
+        // Use Gemini API
+        const apiKey = process.env.AI_INTEGRATIONS_GOOGLE_API_KEY;
+        if (!apiKey) {
+          throw new Error("Gemini API Key is not configured");
+        }
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const fullPrompt = `${systemPromptText}\n\n${prompt}`;
+
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: fullPrompt }] }],
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error(`Gemini API Error: ${response.status} ${errText}`);
+          throw new Error(`Gemini API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        articleText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      } else {
+        // Use Anthropic API (default)
+        const message = await anthropic.messages.create({
+          model: model,
+          max_tokens: 8192,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          system: systemPromptText,
+        });
+
+        const content = message.content[0];
+        articleText = content.type === "text" ? content.text : "";
+      }
+
       const characterCount = articleText.length;
-
       const title = prompt.slice(0, 30);
 
       const savedArticle = await storage.createArticle({
@@ -311,6 +349,24 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting system prompt:", error);
       res.status(500).json({ error: "システムプロンプトの削除に失敗しました" });
+    }
+  });
+
+  // NOTE: /api/stats is handled by api/stats.js (Serverless Function) using Vercel KV.
+  // We do not implement it here to avoid PostgreSQL dependencies for stats.
+
+  // Register /api/chat for local development
+  // We dynamically import properly to handle the .js module
+  app.post("/api/chat", async (req, res) => {
+    try {
+      // Dynamic import of the JS module
+      // Using path relative to this file (server/routes.ts -> ../api/chat.js)
+      // @ts-ignore
+      const { default: chatHandler } = await import("../api/chat.js");
+      await chatHandler(req, res);
+    } catch (error) {
+      console.error("Local /api/chat error:", error);
+      res.status(500).json({ error: "Local chat handler failed" });
     }
   });
 

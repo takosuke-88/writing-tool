@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "license": "MIT",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development tsx server/index.ts",
-    "dev:client": "vite --port 5173",
+    "dev": "cross-env NODE_ENV=development PORT=5002 tsx server/index.ts",
+    "dev:client": "vite --port 5174",
     "build": "vite build",
     "build:server": "tsx script/build.ts",
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
@@ -44,6 +44,7 @@
     "@radix-ui/react-tooltip": "^1.2.0",
     "@tanstack/react-query": "^5.60.5",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@vercel/kv": "^3.0.0",
     "@vercel/node": "^3.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
