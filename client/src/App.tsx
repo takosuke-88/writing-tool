@@ -10,6 +10,8 @@ import { ChatSettingsPanel } from "@/components/chat-settings-panel";
 import { useToast } from "@/hooks/use-toast";
 import { getAllMockConversations, mockMessages } from "@/lib/mockData";
 import type { Conversation, Message } from "@shared/schema";
+import { Switch, Route } from "wouter";
+import Dashboard from "@/pages/dashboard";
 
 // Custom JSON reviver to restore Date objects from localStorage
 function dateReviver(key: string, value: any) {
@@ -95,6 +97,13 @@ function ChatApp() {
     4096,
   );
   const [topP, setTopP] = useLocalStorage<number>("chat-top-p", 100);
+
+  // Fix temperature if it's out of range (legacy values)
+  useEffect(() => {
+    if (temperature > 100) {
+      setTemperature(70); // Reset to default
+    }
+  }, []); // Run once on mount
 
   // Handlers
   const handleNewConversation = () => {
@@ -186,28 +195,42 @@ function ChatApp() {
       handleUpdateTitle(selectedConversationId, newTitle);
     }
 
-    // Simulate AI response (mock) -> Now real API call
+    // Prepare AI Placeholder
+    const aiMessageId = Date.now() + 1;
+    const aiMessage: Message = {
+      id: aiMessageId,
+      conversationId: selectedConversationId,
+      role: "assistant",
+      content: "", // Start empty
+      createdAt: new Date(),
+    };
+
+    setMessages((prev) => ({
+      ...prev,
+      [selectedConversationId]: [
+        ...(prev[selectedConversationId] || []),
+        aiMessage,
+      ],
+    }));
+
     setIsGenerating(true);
 
     try {
-      // Prepare context: include current history + new user message
       const history = messages[selectedConversationId] || [];
-      const apiMessages = [...history, userMessage].map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Filter out messages with empty content to prevent 400 errors from previous failed generations
+      const apiMessages = [...history, userMessage]
+        .filter((m) => m.content && m.content.trim() !== "")
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
 
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: apiMessages,
-          model:
-            model === "claude-sonnet-4-5"
-              ? "claude-sonnet-4-5-20250929"
-              : model, // Map internal ID to API model name
+          model: model,
           temperature,
           maxTokens,
           topP,
@@ -215,36 +238,75 @@ function ChatApp() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let fullText = "";
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.slice(6);
+              if (dataStr === "[DONE]") {
+                done = true;
+                break;
+              }
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.type === "content") {
+                  fullText += data.text;
+                  // Update UI
+                  setMessages((prev) => {
+                    const msgs = prev[selectedConversationId] || [];
+                    return {
+                      ...prev,
+                      [selectedConversationId]: msgs.map((m) =>
+                        m.id === aiMessageId ? { ...m, content: fullText } : m,
+                      ),
+                    };
+                  });
+                } else if (data.type === "status") {
+                  // Optional: Show status
+                  toast({ description: data.text, duration: 2000 });
+                } else if (data.type === "model_selected") {
+                  toast({
+                    title: "モデル自動選択",
+                    description: `Selected: ${data.model}`,
+                  });
+                } else if (data.type === "warning") {
+                  const apiName = data.api ? data.api.toUpperCase() : "API";
+                  toast({
+                    title: `${apiName} 制限警告`,
+                    description: data.message,
+                    variant: "destructive",
+                    duration: 5000,
+                  });
+                } else if (data.type === "error") {
+                  toast({
+                    title: "エラーが発生しました",
+                    description: data.message,
+                    variant: "destructive",
+                    duration: 5000,
+                  });
+                  // If we receive an explicit error from backend stream, allow cleanup?
+                  // Usually stream ends here. We might want to remove the message if it's still empty.
+                }
+              } catch (e) {
+                // console.error("JSON Parse Error", e);
+              }
+            }
+          }
+        }
       }
-
-      const data = await response.json();
-
-      // Debug logging
-      console.log("API Response:", data);
-
-      // Extract text from Anthropic response format
-      const responseText =
-        data.content?.[0]?.text || data.content || "応答を取得できませんでした";
-      console.log("Extracted text:", responseText);
-
-      const aiMessage: Message = {
-        id: Date.now() + 1,
-        conversationId: selectedConversationId,
-        role: "assistant",
-        content: responseText,
-        createdAt: new Date(),
-      };
-
-      setMessages((prev) => ({
-        ...prev,
-        [selectedConversationId]: [
-          ...(prev[selectedConversationId] || []),
-          // userMessage already added before API call (line 172-178)
-          aiMessage,
-        ],
-      }));
     } catch (error) {
       console.error("Chat error:", error);
       toast({
@@ -252,9 +314,14 @@ function ChatApp() {
         description: "AIの応答を取得できませんでした。",
         variant: "destructive",
       });
-
-      // Remove the user message if failed (optional, but good UX to indicate failure)
-      // For now, keeping it but showing error
+      // Remove the failed placeholder message
+      setMessages((prev) => {
+        const msgs = prev[selectedConversationId] || [];
+        return {
+          ...prev,
+          [selectedConversationId]: msgs.filter((m) => m.id !== aiMessageId),
+        };
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -317,7 +384,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="ui-theme">
         <TooltipProvider>
-          <ChatApp />
+          <Switch>
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/" component={ChatApp} />
+            <Route>404 Page Not Found</Route>
+          </Switch>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

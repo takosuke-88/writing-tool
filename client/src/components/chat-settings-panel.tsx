@@ -31,7 +31,12 @@ interface ChatSettingsPanelProps {
 }
 
 const MODELS = [
-  { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
+  { id: "auto", name: "Auto (最適モデル自動選択)", available: true }, // NEW
+  {
+    id: "claude-sonnet-4-5",
+    name: "Claude 4.5 Sonnet",
+    available: true,
+  },
   {
     id: "gemini-2.5-flash",
     name: "Gemini 2.5 Flash (Stable)",
@@ -147,14 +152,14 @@ export function ChatSettingsPanel({
             </div>
             <Slider
               min={0}
-              max={200}
+              max={100}
               step={1}
               value={[temperature]}
               onValueChange={([value]) => onTemperatureChange(value)}
               className="w-full"
             />
             <p className="text-xs text-[#5f6368]">
-              低い値: より決定的、高い値: よりランダム
+              低い値: より決定的、高い値: よりランダム (0.00-1.00)
             </p>
           </div>
 

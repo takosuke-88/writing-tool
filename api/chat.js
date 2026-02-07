@@ -1,202 +1,626 @@
-export default async function handler(req, res) {
-  // Only allow POST
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+import Anthropic from "@anthropic-ai/sdk";
+import { kv } from "@vercel/kv";
+
+// Initialize Anthropic Client
+// Uses the AI_INTEGRATIONS_... key as per user requirement, falling back to ANTHROPIC_API_KEY if needed.
+const apiKey =
+  process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ||
+  process.env.ANTHROPIC_API_KEY;
+const anthropic = new Anthropic({
+  apiKey: apiKey,
+});
+
+// Cost Rates (per 1M tokens)
+const COST_RATES = {
+  "claude-3-5-sonnet-20240620": { input: 3.0, output: 15.0 },
+  "claude-sonnet-4-5-20250929": { input: 6.0, output: 30.0 }, // Estimated rates
+  "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
+  "claude-3-opus-20240229": { input: 15.0, output: 75.0 },
+  "gemini-2.0-flash-exp": { input: 0.1, output: 0.4 },
+  "gemini-1.5-flash": { input: 0.075, output: 0.3 },
+  "sonar-pro": { input: 3.0, output: 15.0 },
+};
+
+// Usage Logging with Vercel KV
+async function logApiUsage(provider, model, inputTokens, outputTokens) {
+  try {
+    const rate = COST_RATES[model] || { input: 1.0, output: 1.0 };
+    const inputCost = inputTokens * rate.input * 1000;
+    const outputCost = outputTokens * rate.output * 1000;
+    const totalCostNano = Math.round(inputCost + outputCost);
+
+    const logEntry = {
+      cost: totalCostNano,
+      provider,
+      model,
+      timestamp: new Date().toISOString(),
+    };
+
+    // If KV is configured, use it. Otherwise, log to console (Memory Mode fallback effectively)
+    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+      await kv.zadd("usage:daily", {
+        score: Date.now(),
+        member: JSON.stringify(logEntry),
+      });
+    } else {
+      // In local development without KV credentials, we just skip or log locally
+      // console.log("[Dev Mode] Usage Log:", logEntry);
+    }
+  } catch (error) {
+    console.error("[Usage Log] Failed:", error);
+  }
+}
+
+// Auto Model Selection Logic
+function selectOptimalModel(messages) {
+  const lastMessage = messages[messages.length - 1].content;
+  const tokenCount = lastMessage.length / 4; // Rudimentary estimation
+
+  // Complexity Analysis
+  const isTechnical =
+    /コード|プログラミング|API|関数|エラー|デバッグ|json|typescript|python/i.test(
+      lastMessage,
+    );
+  const isMath = /計算|数式|グラフ|確率|統計/i.test(lastMessage);
+  const isCreative = /小説|物語|創作|詩|俳句/i.test(lastMessage);
+
+  // Selection Rules
+  if (tokenCount < 50 && !isTechnical && !isMath && !isCreative) {
+    return "claude-3-haiku-20240307"; // Fast & Cheap
+  }
+  if (isTechnical || isMath) {
+    return "gemini-1.5-flash"; // Good at logic/math
+  }
+  if (tokenCount < 500 && !isCreative) {
+    return "claude-3-5-sonnet-20240620"; // Standard
   }
 
-  try {
-    // Debug: Check if API key exists
-    // Debug: Check if API key exists
-    console.log(
-      "Claude API Key:",
-      process.env.ANTHROPIC_API_KEY ? "存在" : "なし",
-    );
-    console.log(
-      "Perplexity API Key:",
-      process.env.PERPLEXITY_API_KEY ? "存在" : "なし",
-    );
-    console.log(
-      "Gemini API Key:",
-      process.env.GEMINI_API_KEY ? "存在" : "なし",
-    );
+  // Complex or Creative
+  return "claude-3-opus-20240229";
+}
 
-    // Extract parameters from request body
+// Tool Definitions
+const TOOLS = [
+  {
+    name: "web_search",
+    description: "Perplexityを使用して最新情報やニュースを検索します。",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "deep_analysis",
+    description: "Geminiを使用して、技術的な詳細分析や考察を行います。",
+    input_schema: {
+      type: "object",
+      properties: { topic: { type: "string" } },
+      required: ["topic"],
+    },
+  },
+];
+
+async function executeWebSearch(query) {
+  if (!process.env.PERPLEXITY_API_KEY) return "API Key missing";
+  const res = await fetch("https://api.perplexity.ai/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "sonar-pro",
+      messages: [{ role: "user", content: query }],
+      return_citations: false,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Perplexity API Error: ${res.status} ${errText}`);
+    if (res.status === 429 || res.status === 402) {
+      throw new Error("PERPLEXITY_QUOTA_EXCEEDED");
+    }
+    throw new Error(`Perplexity API Error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  if (data.usage)
+    await logApiUsage(
+      "perplexity",
+      "sonar-pro",
+      data.usage.prompt_tokens,
+      data.usage.completion_tokens,
+    );
+  return data.choices?.[0]?.message?.content || "No results";
+}
+
+async function executeDeepAnalysis(topic) {
+  if (!process.env.AI_INTEGRATIONS_GOOGLE_API_KEY) return "API Key missing";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.AI_INTEGRATIONS_GOOGLE_API_KEY}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ parts: [{ text: topic }] }] }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Gemini API Error: ${res.status} ${errText}`);
+    if (res.status === 429 || res.status === 402) {
+      throw new Error("GEMINI_QUOTA_EXCEEDED");
+    }
+    throw new Error(`Gemini API Error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  if (data.usageMetadata)
+    await logApiUsage(
+      "gemini",
+      "gemini-2.0-flash-exp",
+      data.usageMetadata.promptTokenCount,
+      data.usageMetadata.candidatesTokenCount,
+    );
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "No results";
+}
+
+function getUserFriendlyMessage(apiName) {
+  if (apiName === "perplexity")
+    return "⚠️ Perplexityの検索クレジットを使い切りました。";
+  if (apiName === "gemini") return "⚠️ Geminiの利用上限に達しました。";
+  return "⚠️ APIの利用上限に達しました。";
+}
+
+// ... (API Keys and Helpers remain same)
+
+// Helper to normalize messages for APIs that require strict alternation (User -> Assistant -> User)
+function normalizeMessages_unused(messages, systemInstructions) {
+  const normalized = [];
+
+  // 1. Add System Message if present
+  if (systemInstructions) {
+    normalized.push({ role: "system", content: systemInstructions });
+  }
+
+  // 2. Iterate and merge consecutive roles
+  for (const msg of messages) {
+    // Skip empty messages
+    if (
+      !msg.content ||
+      (typeof msg.content === "string" && !msg.content.trim())
+    )
+      continue;
+
+    const lastMsg = normalized[normalized.length - 1];
+
+    // If usage of "system" role is not supported by provider in middle of chat, treat as user or merge?
+    // Perplexity supports 'system' at start.
+    // If client sends 'system' messages in history (unlikely), handle them.
+
+    if (lastMsg && lastMsg.role === msg.role) {
+      // Merge content
+      if (
+        typeof lastMsg.content === "string" &&
+        typeof msg.content === "string"
+      ) {
+        lastMsg.content += "\n\n" + msg.content;
+      } else {
+        // Complex content merging (fallback to just pushing if types differ, forcing error? or stringify)
+        // For this app, content is likely string.
+        lastMsg.content = `${lastMsg.content}\n\n${msg.content}`;
+      }
+    } else {
+      normalized.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  // 3. Ensure conversation starts with User (if no system) or System.
+  // Perplexity typically fine with System first.
+  // BUT if the first user message was merged into a previous leftover? Unlikely in this flow.
+
+  return normalized;
+}
+
+// Helper to normalize messages for APIs that require strict alternation (User -> Assistant -> User)
+function normalizeMessages(messages, systemInstructions) {
+  const normalized = [];
+
+  // 1. Add System Message if present
+  if (systemInstructions) {
+    normalized.push({ role: "system", content: systemInstructions });
+  }
+
+  // 2. Iterate and merge consecutive roles
+  for (const msg of messages) {
+    // Skip empty messages
+    if (
+      !msg.content ||
+      (typeof msg.content === "string" && !msg.content.trim())
+    )
+      continue;
+
+    const lastMsg = normalized[normalized.length - 1];
+
+    // If usage of "system" role is not supported by provider in middle of chat, treat as user or merge?
+    // Perplexity supports 'system' at start.
+    // If client sends 'system' messages in history (unlikely), handle them.
+
+    if (lastMsg && lastMsg.role === msg.role) {
+      // Merge content
+      if (
+        typeof lastMsg.content === "string" &&
+        typeof msg.content === "string"
+      ) {
+        lastMsg.content += "\n\n" + msg.content;
+      } else {
+        lastMsg.content = `${lastMsg.content}\n\n${msg.content}`;
+      }
+    } else {
+      normalized.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  return normalized;
+}
+
+// --- Perplexity Streaming Handler ---
+async function streamPerplexity(
+  res,
+  model,
+  messages,
+  maxTokens,
+  systemInstructions,
+  temperature,
+  topP,
+) {
+  try {
+    // Default system prompt for Perplexity to ensure conversational behavior
+    if (!systemInstructions || !systemInstructions.trim()) {
+      systemInstructions =
+        "You are a helpful and conversational AI assistant. Engage in natural dialogue with the user. Do not just provide search results or definitions unless asked.";
+    }
+
+    const apiMessages = normalizeMessages(messages, systemInstructions);
+
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: apiMessages,
+        stream: true,
+        max_tokens: maxTokens || 4096,
+        temperature: temperature ? temperature / 100 : 0.7,
+        top_p: topP ? topP / 100 : 1.0,
+      }),
+    });
+    // ... (rest of function)
+
+    if (!response.ok) {
+      if (response.status === 429 || response.status === 402) {
+        throw new Error("PERPLEXITY_QUOTA_EXCEEDED");
+      }
+      const errText = await response.text();
+      throw new Error(`Perplexity API Error: ${response.status} ${errText}`);
+    }
+
+    if (!response.body) throw new Error("No response body from Perplexity");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+
+    // Usage tracking accumulation
+    let inputTokens = 0; // Perplexity stream doesn't always send usage in chunks well, approximated or handled if final chunk has usage
+    let outputTokens = 0;
+
+    res.write(`data: ${JSON.stringify({ type: "model_selected", model })}\n\n`);
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      done = readerDone;
+      if (value) {
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.trim().startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (dataStr === "[DONE]") {
+              done = true;
+              break;
+            }
+            try {
+              const data = JSON.parse(dataStr);
+              const content = data.choices?.[0]?.delta?.content;
+              if (content) {
+                res.write(
+                  `data: ${JSON.stringify({ type: "content", text: content })}\n\n`,
+                );
+                outputTokens++; // Rough estimation if not provided
+              }
+              if (data.usage) {
+                inputTokens = data.usage.prompt_tokens;
+                outputTokens = data.usage.completion_tokens;
+              }
+            } catch (e) {
+              // ignore parse errors for partial chunks
+            }
+          }
+        }
+      }
+    }
+
+    // Log final usage
+    await logApiUsage("perplexity", model, inputTokens, outputTokens);
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (error) {
+    if (error.message === "PERPLEXITY_QUOTA_EXCEEDED") {
+      res.write(
+        `data: ${JSON.stringify({
+          type: "warning",
+          api: "perplexity",
+          message: getUserFriendlyMessage("perplexity"),
+        })}\n\n`,
+      );
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: "Perplexityの制限に達しました。" })}\n\n`,
+      );
+    } else {
+      console.error("Perplexity Stream Error:", error);
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
+      );
+    }
+    res.end();
+  }
+}
+
+// --- Gemini Streaming Handler ---
+async function streamGemini(res, model, messages, maxTokens, systemInstructions, temperature, topP) {
+  // Gemini API format is different (contents: [{ role: ..., parts: [{text: ...}] }])
+  // And streaming endpoint is streamGenerateContent
+  try {
+    res.write(`data: ${JSON.stringify({ type: "model_selected", model })}\n\n`);
+
+    if (!process.env.AI_INTEGRATIONS_GOOGLE_API_KEY) {
+      throw new Error("Gemini API Key missing");
+    }
+
+    // Convert messages to Gemini format
+    const geminiContents = messages.map((msg) => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    }));
+
+    // Build request body
+    const requestBody = {
+      contents: geminiContents,
+    };
+
+    // Add system instructions if provided
+    if (systemInstructions && systemInstructions.trim()) {
+      requestBody.systemInstruction = {
+        parts: [{ text: systemInstructions }],
+      };
+    }
+
+    // Add generation config
+    requestBody.generationConfig = {
+      ...(maxTokens && { maxOutputTokens: maxTokens }),
+      ...(temperature && { temperature: temperature / 100 }),
+      ...(topP && { topP: topP / 100 }),
+    };
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.AI_INTEGRATIONS_GOOGLE_API_KEY}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`Gemini API Error: ${response.status} ${errText}`);
+      if (response.status === 429 || response.status === 402 || response.status === 503) {
+        throw new Error("GEMINI_QUOTA_EXCEEDED");
+      }
+      throw new Error(`Gemini API Error: ${response.status} ${errText}`);
+    }
+
+    const data = await response.json();
+    if (data.usageMetadata) {
+      await logApiUsage(
+        "gemini",
+        model,
+        data.usageMetadata.promptTokenCount,
+        data.usageMetadata.candidatesTokenCount,
+      );
+    }
+
+    const result =
+      data.candidates?.[0]?.content?.parts?.[0]?.text || "No results";
+
+    res.write(`data: ${JSON.stringify({ type: "content", text: result })}\n\n`);
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (error) {
+    if (error.message === "GEMINI_QUOTA_EXCEEDED") {
+      res.write(
+        `data: ${JSON.stringify({
+          type: "warning",
+          api: "gemini",
+          message: getUserFriendlyMessage("gemini"),
+        })}\n\n`,
+      );
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: "Geminiの制限に達しました。" })}\n\n`,
+      );
+    } else {
+      console.error("Gemini Stream Error:", error);
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
+      );
+    }
+    res.end();
+  }
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "Method not allowed" });
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  try {
     const {
       messages,
-      model,
+      model: requestedModel,
       temperature,
       maxTokens,
       topP,
       systemInstructions,
     } = req.body;
 
-    // Determine API provider and configuration
-    let apiUrl = "https://api.anthropic.com/v1/messages";
-    let headers = {
-      "content-type": "application/json",
-    };
-    let body = {};
+    let model = requestedModel;
+    if (model === "auto") {
+      model = selectOptimalModel(messages);
+    } else if (model === "claude-sonnet-4-5") {
+      model = "claude-sonnet-4-5-20250929";
+    }
 
-    const isPerplexity = model === "sonar-pro";
-
-    if (isPerplexity) {
-      apiUrl = "https://api.perplexity.ai/chat/completions";
-      headers["Authorization"] = `Bearer ${process.env.PERPLEXITY_API_KEY}`;
-
-      // Simplify messages for Perplexity to avoid "user or tool message(s) should alternate" error
-      // Only send system instructions + the last user message
-      const lastUserMessage = messages[messages.length - 1];
-      const completionMessages = [];
-
-      if (systemInstructions) {
-        completionMessages.push({
-          role: "system",
-          content: systemInstructions,
-        });
-      }
-
-      if (lastUserMessage) {
-        completionMessages.push({
-          role: lastUserMessage.role, // Should be "user"
-          content: lastUserMessage.content,
-        });
-      }
-
-      console.log(
-        "[Perplexity] Formatted messages:",
-        JSON.stringify(completionMessages, null, 2),
+    // --- ROUTING LOGIC ---
+    if (model.startsWith("sonar") || model.includes("perplexity")) {
+      return await streamPerplexity(
+        res,
+        model,
+        messages,
+        maxTokens,
+        systemInstructions,
+        temperature,
+        topP,
       );
-
-      body = {
-        model: "sonar-pro",
-        messages: completionMessages,
-        temperature: temperature !== undefined ? temperature / 100 : 0.7,
-        max_tokens: maxTokens || 2048,
-        top_p: topP !== undefined ? topP / 100 : 1,
-        return_citations: false,
-        return_images: false,
-        return_related_questions: false,
-      };
-    } else if (
-      model === "gemini-3-flash-preview" ||
-      model === "gemini-2.5-flash"
-    ) {
-      // Gemini API
-      const geminiModel =
-        model === "gemini-2.5-flash"
-          ? "gemini-2.5-flash"
-          : "gemini-3-flash-preview";
-      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${process.env.GEMINI_API_KEY}`;
-
-      // Gemini expects: { contents: [ { role: "user"|"model", parts: [{ text: "..." }] } ], systemInstruction: ... }
-      const geminiContents = messages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
-
-      body = {
-        contents: geminiContents,
-        generationConfig: {
-          temperature: temperature !== undefined ? temperature / 100 : 0.7,
-          maxOutputTokens: maxTokens || 2048,
-          topP: topP !== undefined ? topP / 100 : 0.95,
-        },
-      };
-
-      if (systemInstructions) {
-        body.systemInstruction = {
-          parts: [{ text: systemInstructions }],
-        };
-      }
-
-      console.log("[Gemini] Request body:", JSON.stringify(body, null, 2));
-    } else {
-      // Default to Claude API
-      headers["x-api-key"] = process.env.ANTHROPIC_API_KEY;
-      headers["anthropic-version"] = "2023-06-01";
-
-      const apiModel = model || "claude-sonnet-4-5-20250929";
-
-      body = {
-        model: apiModel,
-        max_tokens: maxTokens || 2048,
-        messages: messages,
-      };
-
-      if (temperature !== undefined) {
-        body.temperature = temperature / 100;
-      }
-
-      if (systemInstructions) {
-        body.system = systemInstructions;
-      }
     }
 
-    console.log(
-      "[API] Calling Provider:",
-      model === "gemini-3-flash-preview" || model === "gemini-2.5-flash"
-        ? "Gemini"
-        : isPerplexity
-          ? "Perplexity"
-          : "Anthropic",
-      "with model:",
-      model,
-    );
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      // Handle 503 service unavailable error
-      if (response.status === 503) {
-        const errorText = await response.text();
-        console.error("API Service Unavailable (503):", model, errorText);
-        return res.status(503).json({
-          error:
-            "APIサービスが一時的に利用できません。数秒後に再試行してください。",
-        });
-      }
-
-      // Handle 429 quota exceeded error
-      if (response.status === 429) {
-        console.error("API Rate Limit Error (429):", model);
-        return res.status(429).json({
-          error: "API制限に達しました。しばらく待ってから再試行してください。",
-        });
-      }
-
-      const error = await response.json();
-      console.error("API Error:", error);
-      return res.status(response.status).json(error);
+    if (model.includes("gemini")) {
+      return await streamGemini(res, model, messages, maxTokens, systemInstructions, temperature, topP);
     }
 
-    const data = await response.json();
+    // --- ANTHROPIC (DEFAULT) ---
+    // ... (Original Anthropic Streaming Logic)
+    let conversationMessages = [...messages];
+    let isFinalResponse = false;
+    let iteration = 0;
 
-    // Normalize response to maintain compatibility with client
-    // Client expects: { content: [ { text: "..." } ] } or { content: "..." }
-    if (isPerplexity) {
-      // Perplexity (OpenAI format): choices[0].message.content
-      const content = data.choices?.[0]?.message?.content || "";
-      return res.status(200).json({
-        content: [{ text: content }],
+    while (!isFinalResponse && iteration < 3) {
+      iteration++;
+      const stream = anthropic.messages.stream({
+        model: model,
+        max_tokens: maxTokens || 4096,
+        // Claude doesn't allow both temperature and top_p - prefer temperature
+        temperature: (temperature || 70) / 100,
+        system: systemInstructions,
+        messages: conversationMessages,
+        tools: TOOLS,
       });
-    }
 
-    if (model === "gemini-3-flash-preview" || model === "gemini-2.5-flash") {
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      return res.status(200).json({
-        content: [{ text: text }],
-      });
-    }
+      let currentToolUse = null;
 
-    // Anthropic format is already compatible
-    return res.status(200).json(data);
+      for await (const event of stream) {
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          res.write(
+            `data: ${JSON.stringify({ type: "content", text: event.delta.text })}\n\n`,
+          );
+        } else if (
+          event.type === "content_block_start" &&
+          event.content_block.type === "tool_use"
+        ) {
+          currentToolUse = {
+            id: event.content_block.id,
+            name: event.content_block.name,
+            inputJson: "",
+          };
+          res.write(
+            `data: ${JSON.stringify({ type: "status", text: `Executing ${event.content_block.name}...` })}\n\n`,
+          );
+        } else if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "input_json_delta"
+        ) {
+          if (currentToolUse)
+            currentToolUse.inputJson += event.delta.partial_json;
+        }
+      }
+
+      const finalMessage = await stream.finalMessage();
+      if (finalMessage.usage) {
+        await logApiUsage(
+          "claude",
+          model,
+          finalMessage.usage.input_tokens,
+          finalMessage.usage.output_tokens,
+        );
+      }
+
+      if (finalMessage.stop_reason === "tool_use") {
+        conversationMessages.push({
+          role: "assistant",
+          content: finalMessage.content,
+        });
+        const toolResults = await Promise.all(
+          finalMessage.content
+            .filter((c) => c.type === "tool_use")
+            .map(async (tool) => {
+              let result = "";
+              try {
+                const args = tool.input;
+                if (tool.name === "web_search")
+                  result = await executeWebSearch(args.query);
+                else if (tool.name === "deep_analysis")
+                  result = await executeDeepAnalysis(args.topic);
+              } catch (e) {
+                // Warning Logic
+                if (e.message.includes("QUOTA_EXCEEDED")) {
+                  const apiName = e.message.includes("PERPLEXITY")
+                    ? "perplexity"
+                    : "gemini";
+                  res.write(
+                    `data: ${JSON.stringify({ type: "warning", api: apiName, message: getUserFriendlyMessage(apiName) })}\n\n`,
+                  );
+                  result = `[SYSTEM ERROR] ${apiName} quota exceeded.`;
+                } else {
+                  result = `Error: ${e.message}`;
+                }
+              }
+              return {
+                type: "tool_result",
+                tool_use_id: tool.id,
+                content: result,
+              };
+            }),
+        );
+        conversationMessages.push({ role: "user", content: toolResults });
+      } else {
+        isFinalResponse = true;
+      }
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
   } catch (error) {
-    console.error("Server Error:", error);
-    const message = error.message || "Unknown error";
-    return res.status(500).json({ error: message });
+    console.error("Stream Error:", error);
+    res.write(
+      `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
+    );
+    res.end();
   }
 }
