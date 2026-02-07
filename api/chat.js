@@ -69,14 +69,14 @@ function selectOptimalModel(messages) {
     return "claude-3-haiku-20240307"; // Fast & Cheap
   }
   if (isTechnical || isMath) {
-    return "gemini-1.5-flash"; // Good at logic/math
+    return "gemini-2.5-flash"; // Good at logic/math, streaming enabled
   }
   if (tokenCount < 500 && !isCreative) {
-    return "claude-3-5-sonnet-20240620"; // Standard
+    return "claude-sonnet-4-5"; // Latest Sonnet, streaming enabled
   }
 
   // Complex or Creative
-  return "claude-3-opus-20240229";
+  return "claude-sonnet-4-5"; // Use latest model for best quality
 }
 
 // Tool Definitions
