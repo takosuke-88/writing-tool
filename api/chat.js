@@ -416,7 +416,8 @@ async function streamGemini(res, model, messages, maxTokens, systemInstructions,
       ...(topP && { topP: topP / 100 }),
     };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.AI_INTEGRATIONS_GOOGLE_API_KEY}`;
+    // Use streaming endpoint
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${process.env.AI_INTEGRATIONS_GOOGLE_API_KEY}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -433,20 +434,51 @@ async function streamGemini(res, model, messages, maxTokens, systemInstructions,
       throw new Error(`Gemini API Error: ${response.status} ${errText}`);
     }
 
-    const data = await response.json();
-    if (data.usageMetadata) {
-      await logApiUsage(
-        "gemini",
-        model,
-        data.usageMetadata.promptTokenCount,
-        data.usageMetadata.candidatesTokenCount,
-      );
+    if (!response.body) throw new Error("No response body from Gemini");
+
+    // Stream response
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      done = readerDone;
+      if (value) {
+        const chunk = decoder.decode(value, { stream: true });
+        // Gemini streams JSON objects separated by newlines
+        const lines = chunk.split("\n").filter(line => line.trim());
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+
+            // Extract text content
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              res.write(`data: ${JSON.stringify({ type: "content", text })}\n\n`);
+            }
+
+            // Track usage metadata
+            if (data.usageMetadata) {
+              totalInputTokens = data.usageMetadata.promptTokenCount || 0;
+              totalOutputTokens = data.usageMetadata.candidatesTokenCount || 0;
+            }
+          } catch (e) {
+            // Skip invalid JSON lines
+            continue;
+          }
+        }
+      }
     }
 
-    const result =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || "No results";
+    // Log usage after streaming completes
+    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+      await logApiUsage("gemini", model, totalInputTokens, totalOutputTokens);
+    }
 
-    res.write(`data: ${JSON.stringify({ type: "content", text: result })}\n\n`);
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (error) {
