@@ -5,6 +5,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
 
   try {
+    // Check if KV is available
+    const isKVAvailable = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
+
     const now = Date.now();
     const startOfDay = new Date().setHours(0, 0, 0, 0);
     const startOfMonth = new Date(
@@ -15,7 +18,19 @@ export default async function handler(req, res) {
     const start30Days = now - 30 * 24 * 60 * 60 * 1000;
 
     // Fetch logs from Vercel KV
-    const logs = await kv.zrange("usage:daily", start30Days, now);
+    let logs = [];
+    if (isKVAvailable) {
+      logs = await kv.zrange("usage:daily", start30Days, now);
+    } else {
+      // Mock data for local development
+      console.log("[Dev Mode] Using mock data for usage stats");
+      logs = [
+        JSON.stringify({ cost: 50000000, provider: "claude", model: "claude-sonnet-4-5-20250929", timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString() }),
+        JSON.stringify({ cost: 30000000, provider: "gemini", model: "gemini-2.5-flash", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString() }),
+        JSON.stringify({ cost: 20000000, provider: "perplexity", model: "sonar-pro", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() }),
+        JSON.stringify({ cost: 80000000, provider: "claude", model: "claude-sonnet-4-5-20250929", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString() }),
+      ];
+    }
 
     // Initialize stats
     const stats = {
