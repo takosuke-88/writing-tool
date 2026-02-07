@@ -33,7 +33,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/stats")
+    // Try /api/usage first, fallback to /api/stats
+    fetch("/api/usage")
+      .catch(() => fetch("/api/stats"))
       .then((res) => res.json())
       .then((data) => {
         setStats(data);
@@ -53,9 +55,67 @@ export default function Dashboard() {
     return `$${val.toFixed(4)}`;
   };
 
+  // Monthly budget and progress
+  const MONTHLY_BUDGET = 50; // $50 target
+  const monthlyProgress = (stats.thisMonth.cost / MONTHLY_BUDGET) * 100;
+  const isWarning = stats.thisMonth.cost > 40;
+  const isDanger = stats.thisMonth.cost > 50;
+
+  const getProgressColor = () => {
+    if (isDanger) return "bg-red-500";
+    if (isWarning) return "bg-yellow-500";
+    return "bg-green-500";
+  };
+
   return (
     <div className="p-8 space-y-8 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold mb-6">API使用状況ダッシュボード</h1>
+
+      {/* Monthly Budget Progress */}
+      <Card className={isDanger ? "border-red-500 border-2" : isWarning ? "border-yellow-500 border-2" : ""}>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>今月の予算進捗</span>
+            {isDanger && <span className="text-red-500 text-sm font-normal">⚠️ 予算超過</span>}
+            {isWarning && !isDanger && <span className="text-yellow-600 text-sm font-normal">⚠️ 予算警告</span>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex justify-between items-baseline">
+              <div>
+                <div className="text-4xl font-bold">{formatCurrency(stats.thisMonth.cost)}</div>
+                <div className="text-sm text-gray-500">目標: ${MONTHLY_BUDGET.toFixed(2)}以内</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-semibold">{monthlyProgress.toFixed(0)}%</div>
+                <div className="text-xs text-gray-500">予算使用率</div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
+              <div
+                className={`h-full ${getProgressColor()} transition-all duration-300 flex items-center justify-center text-white text-xs font-semibold`}
+                style={{ width: `${Math.min(monthlyProgress, 100)}%` }}
+              >
+                {monthlyProgress > 10 && `${formatCurrency(stats.thisMonth.cost)} / $${MONTHLY_BUDGET}`}
+              </div>
+            </div>
+
+            {isDanger && (
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
+                💰 予算を超過しています。使用量を確認してください。
+              </div>
+            )}
+            {isWarning && !isDanger && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
+                ⚡ 予算の80%に達しました。残り${(MONTHLY_BUDGET - stats.thisMonth.cost).toFixed(2)}です。
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Today's Stats */}
