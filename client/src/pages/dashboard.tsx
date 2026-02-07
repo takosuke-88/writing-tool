@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 import {
   BarChart,
   Bar,
@@ -69,7 +72,14 @@ export default function Dashboard() {
 
   return (
     <div className="p-8 space-y-8 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6">API使用状況ダッシュボード</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <Link href="/">
+          <Button variant="ghost" size="icon" className="h-10 w-10">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </Link>
+        <h1 className="text-3xl font-bold">API使用状況ダッシュボード</h1>
+      </div>
 
       {/* Monthly Budget Progress */}
       <Card className={isDanger ? "border-red-500 border-2" : isWarning ? "border-yellow-500 border-2" : ""}>

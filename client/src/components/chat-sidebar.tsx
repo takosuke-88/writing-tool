@@ -6,11 +6,13 @@ import {
   MessageSquare,
   Trash2,
   Edit2,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Conversation } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -68,6 +70,16 @@ export function ChatSidebar({
           <Plus className="h-4 w-4 mr-2" />
           新しいチャット
         </Button>
+
+        <Link href="/dashboard">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-[#5f6368] hover:bg-[#f1f3f4] h-10 mt-2"
+          >
+            <BarChart3 className="h-4 w-4 mr-2" />
+            使用状況ダッシュボード
+          </Button>
+        </Link>
       </div>
 
       {/* Conversation List */}
