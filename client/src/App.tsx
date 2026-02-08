@@ -291,11 +291,12 @@ function ChatApp() {
                     duration: 5000,
                   });
                 } else if (data.type === "error") {
+                  console.error("Received error frame:", data);
                   toast({
                     title: "エラーが発生しました",
                     description: data.message,
                     variant: "destructive",
-                    duration: 5000,
+                    duration: 10000,
                   });
                   // If we receive an explicit error from backend stream, allow cleanup?
                   // Usually stream ends here. We might want to remove the message if it's still empty.

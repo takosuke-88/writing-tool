@@ -408,7 +408,15 @@ async function streamGemini(
   try {
     res.write(`data: ${JSON.stringify({ type: "model_selected", model })}\n\n`);
 
+    console.log("[DEBUG Gemini] Starting request for model:", model);
     const apiKey = process.env.AI_INTEGRATIONS_GOOGLE_API_KEY;
+    console.log(
+      "[DEBUG Gemini] API Key present:",
+      !!apiKey,
+      "Length:",
+      apiKey ? apiKey.length : 0,
+    );
+
     if (!apiKey) {
       throw new Error("Gemini API Key missing");
     }
@@ -446,6 +454,11 @@ async function streamGemini(
     // Use streamGenerateContent endpoint
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
+    console.log(
+      "[DEBUG Gemini] Fetching URL:",
+      url.replace(apiKey, "HIDDEN_KEY"),
+    );
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -453,6 +466,8 @@ async function streamGemini(
       },
       body: JSON.stringify(requestBody),
     });
+
+    console.log("[DEBUG Gemini] Response status:", response.status);
 
     if (!response.ok) {
       const errText = await response.text();
