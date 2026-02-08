@@ -409,7 +409,8 @@ async function streamGemini(
     res.write(`data: ${JSON.stringify({ type: "model_selected", model })}\n\n`);
 
     console.log("[DEBUG Gemini] Starting request for model:", model);
-    const apiKey = process.env.AI_INTEGRATIONS_GOOGLE_API_KEY;
+    const apiKey =
+      process.env.AI_INTEGRATIONS_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY;
     console.log(
       "[DEBUG Gemini] API Key present:",
       !!apiKey,
