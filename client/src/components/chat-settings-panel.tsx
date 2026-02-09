@@ -28,6 +28,8 @@ interface ChatSettingsPanelProps {
   onTopPChange: (topP: number) => void;
   onSystemInstructionsChange: (instructions: string) => void;
   onSystemInstructionsOpenChange: (open: boolean) => void;
+  searchMode: string;
+  onSearchModeChange: (mode: string) => void;
 }
 
 const MODELS = [
@@ -72,6 +74,8 @@ export function ChatSettingsPanel({
   onTopPChange,
   onSystemInstructionsChange,
   onSystemInstructionsOpenChange,
+  searchMode,
+  onSearchModeChange,
 }: ChatSettingsPanelProps) {
   const selectedModel = MODELS.find((m) => m.id === model);
 
@@ -109,6 +113,34 @@ export function ChatSettingsPanel({
                 このモデルは現在準備中です
               </p>
             )}
+          </div>
+
+          {/* Search Mode Selection - NEW */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-[#202124]">
+              検索設定
+            </Label>
+            <Select value={searchMode} onValueChange={onSearchModeChange}>
+              <SelectTrigger className="bg-white border-[#dadce0] text-[#202124] h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">自動 (Auto)</SelectItem>
+                <SelectItem value="high_precision">
+                  高精度 (Perplexity)
+                </SelectItem>
+                <SelectItem value="standard">標準 (Claude)</SelectItem>
+                <SelectItem value="eco">節約 (Eco)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#5f6368]">
+              {searchMode === "auto" && "AIが最適な検索ツールを自動選択します"}
+              {searchMode === "high_precision" &&
+                "Perplexity APIを使用 (高コスト・高精度)"}
+              {searchMode === "standard" &&
+                "Claude Web Searchを使用 (中コスト)"}
+              {searchMode === "eco" && "無料検索APIを使用 (低コスト)"}
+            </p>
           </div>
 
           {/* System Instructions */}

@@ -97,6 +97,10 @@ function ChatApp() {
     4096,
   );
   const [topP, setTopP] = useLocalStorage<number>("chat-top-p", 100);
+  const [searchMode, setSearchMode] = useLocalStorage<string>(
+    "chat-search-mode",
+    "auto",
+  );
 
   // Fix temperature if it's out of range (legacy values)
   useEffect(() => {
@@ -235,6 +239,7 @@ function ChatApp() {
           maxTokens,
           topP,
           systemInstructions,
+          searchMode,
         }),
       });
 
@@ -375,6 +380,8 @@ function ChatApp() {
         onTopPChange={setTopP}
         onSystemInstructionsChange={setSystemInstructions}
         onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
+        searchMode={searchMode}
+        onSearchModeChange={setSearchMode}
       />
     </div>
   );
