@@ -53,31 +53,43 @@ async function logApiUsage(provider, model, inputTokens, outputTokens) {
 }
 
 // Auto Model Selection Logic
+// Helper to estimate tokens (rudimentary)
+function estimateTokens(text) {
+  return text.length / 4;
+}
+
+// Helper to analyze complexity
+function analyzeComplexity(message) {
+  // キーワード判定
+  if (/コード|プログラミング|API|関数/i.test(message)) return "technical";
+  if (/計算|数式|グラフ/i.test(message)) return "math";
+  if (/小説|物語|創作/i.test(message)) return "creative";
+  if (message.length < 50) return "simple";
+  return "complex";
+}
+
 function selectOptimalModel(messages) {
   const lastMessage = messages[messages.length - 1].content;
-  const tokenCount = lastMessage.length / 4; // Rudimentary estimation
+  const tokenCount = estimateTokens(lastMessage);
+  const complexity = analyzeComplexity(lastMessage);
 
-  // Complexity Analysis
-  const isTechnical =
-    /コード|プログラミング|API|関数|エラー|デバッグ|json|typescript|python/i.test(
-      lastMessage,
-    );
-  const isMath = /計算|数式|グラフ|確率|統計/i.test(lastMessage);
-  const isCreative = /小説|物語|創作|詩|俳句/i.test(lastMessage);
-
-  // Selection Rules
-  if (tokenCount < 50 && !isTechnical && !isMath && !isCreative) {
-    return "claude-3-haiku-20240307"; // Fast & Cheap
-  }
-  if (isTechnical || isMath) {
-    return "gemini-2.5-flash"; // Good at logic/math, streaming enabled
-  }
-  if (tokenCount < 500 && !isCreative) {
-    return "claude-sonnet-4-5"; // Latest Sonnet, streaming enabled
+  // 短い質問
+  if (tokenCount < 50 && complexity === "simple") {
+    return "claude-3-haiku-20240307"; // User requested 'claude-4.5-haiku' but mapping to valid ID for now
   }
 
-  // Complex or Creative
-  return "claude-sonnet-4-5"; // Use latest model for best quality
+  // 技術的・数学的質問
+  if (complexity === "technical" || complexity === "math") {
+    return "gemini-2.5-flash"; // Geminiが得意
+  }
+
+  // 標準的な質問
+  if (tokenCount < 500) {
+    return "claude-sonnet-4-5"; // $3/$15（標準）
+  }
+
+  // Default fallback for complex/creative/long requests
+  return "claude-sonnet-4-5";
 }
 
 // Tool Definitions
@@ -112,7 +124,12 @@ async function executeWebSearch(query) {
     },
     body: JSON.stringify({
       model: "sonar-pro",
-      messages: [{ role: "user", content: query }],
+      messages: [
+        {
+          role: "user",
+          content: `以下について簡潔に検索結果をまとめてください: ${query}`,
+        },
+      ],
       return_citations: false,
     }),
   });
