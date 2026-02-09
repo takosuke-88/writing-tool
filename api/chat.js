@@ -137,6 +137,15 @@ const TOOLS = [
   },
 ];
 
+// Footer Helper
+function createFooter(model, usedTools = []) {
+  const toolsInfo =
+    usedTools.length > 0
+      ? `\nTools: ${[...new Set(usedTools)].join(", ")}`
+      : "";
+  return `\n\n---\nModel: ${model}${toolsInfo}`;
+}
+
 // --- Search Executors ---
 
 // 1. High Precision (Perplexity)
@@ -468,6 +477,11 @@ async function streamPerplexity(
 
     // Log final usage
     await logApiUsage("perplexity", model, inputTokens, outputTokens);
+
+    // Append Footer
+    const footer = createFooter(model, ["Perplexity (Native)"]);
+    res.write(`data: ${JSON.stringify({ type: "content", text: footer })}\n\n`);
+
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (error) {
@@ -651,6 +665,10 @@ async function streamGemini(
       await logApiUsage("gemini", model, totalInputTokens, totalOutputTokens);
     }
 
+    // Append Footer
+    const footer = createFooter(model, []);
+    res.write(`data: ${JSON.stringify({ type: "content", text: footer })}\n\n`);
+
     res.write("data: [DONE]\n\n");
     console.log("[DEBUG Gemini] Stream ended successfully");
   } catch (error) {
@@ -777,6 +795,7 @@ export default async function handler(req, res) {
     let conversationMessages = [...messages];
     let isFinalResponse = false;
     let iteration = 0;
+    const usedTools = []; // Track used tools
 
     while (!isFinalResponse && iteration < 3) {
       iteration++;
@@ -809,6 +828,7 @@ export default async function handler(req, res) {
             name: event.content_block.name,
             inputJson: "",
           };
+          usedTools.push(event.content_block.name); // Track tool usage
           res.write(
             `data: ${JSON.stringify({ type: "status", text: `Executing ${event.content_block.name}...` })}\n\n`,
           );
@@ -927,6 +947,11 @@ export default async function handler(req, res) {
         conversationMessages.push({ role: "user", content: toolResults });
       } else {
         isFinalResponse = true;
+        // Append Footer
+        const footer = createFooter(model, usedTools);
+        res.write(
+          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+        );
       }
     }
     res.write("data: [DONE]\n\n");
