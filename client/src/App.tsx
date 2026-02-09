@@ -280,7 +280,6 @@ function ChatApp() {
                     };
                   });
                 } else if (data.type === "status") {
-                  // Optional: Show status
                   toast({ description: data.text, duration: 2000 });
                 } else if (data.type === "model_selected") {
                   toast({
@@ -307,17 +306,6 @@ function ChatApp() {
                 }
               } catch (e) {
                 // ignore parse errors
-              }
-                    title: "エラーが発生しました",
-                    description: data.message,
-                    variant: "destructive",
-                    duration: 10000,
-                  });
-                  // If we receive an explicit error from backend stream, allow cleanup?
-                  // Usually stream ends here. We might want to remove the message if it's still empty.
-                }
-              } catch (e) {
-                // console.error("JSON Parse Error", e);
               }
             }
           }
