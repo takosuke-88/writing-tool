@@ -544,8 +544,95 @@ async function streamGemini(
       };
     }
 
-    // ... (Logging/Calling logic) ...
-    // ... (skipping unchanged code) ...
+    console.log("[DEBUG Gemini] Request body prepared");
+
+    // Use streamGenerateContent endpoint
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+    console.log(
+      "[DEBUG Gemini] Fetching URL:",
+      url.replace(apiKey, "HIDDEN_KEY"),
+    );
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    console.log("[DEBUG Gemini] Response status:", response.status);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[DEBUG Gemini] API Error: ${response.status} ${errText}`);
+      if (response.status === 429 || response.status === 503) {
+        throw new Error("GEMINI_QUOTA_EXCEEDED");
+      }
+      throw new Error(`Gemini API Error: ${response.status} - ${errText}`);
+    }
+
+    if (!response.body) {
+      throw new Error("No response body from Gemini");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let chunkCount = 0;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      done = readerDone;
+
+      if (value) {
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.trim().startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+
+            try {
+              const data = JSON.parse(dataStr);
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+              if (text) {
+                chunkCount++;
+                res.write(
+                  `data: ${JSON.stringify({ type: "content", text })}\n\n`,
+                );
+              }
+
+              // Track usage if available
+              if (data.usageMetadata) {
+                totalInputTokens = data.usageMetadata.promptTokenCount || 0;
+                totalOutputTokens =
+                  data.usageMetadata.candidatesTokenCount || 0;
+              }
+            } catch (e) {
+              // Ignore parse errors for partial chunks
+              console.log("[DEBUG Gemini] Parse error for chunk:", e.message);
+            }
+          }
+        }
+      }
+    }
+
+    console.log("[DEBUG Gemini] Stream complete:", {
+      totalChunks: chunkCount,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+    });
+
+    // Log usage after streaming completes
+    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+      await logApiUsage("gemini", model, totalInputTokens, totalOutputTokens);
+    }
 
     // Append Footer
     const debugInfo = {
@@ -554,7 +641,13 @@ async function streamGemini(
       appliedTopP: appliedTopP,
       systemInstructionSent: !!requestBody.systemInstruction,
     };
-    const footer = createFooter(model, [], debugInfo);
+
+    // Send Debug Info
+    res.write(
+      `data: ${JSON.stringify({ type: "debug", data: debugInfo })}\n\n`,
+    );
+
+    const footer = createFooter(model, []);
     res.write(`data: ${JSON.stringify({ type: "content", text: footer })}\n\n`);
 
     res.write("data: [DONE]\n\n");
