@@ -298,6 +298,16 @@ function ChatApp() {
                 } else if (data.type === "error") {
                   console.error("Received error frame:", data);
                   toast({
+                    title: "エラー",
+                    description: data.message,
+                    variant: "destructive",
+                  });
+                } else if (data.type === "debug") {
+                  console.log("[API Debug Info]", data.data);
+                }
+              } catch (e) {
+                // ignore parse errors
+              }
                     title: "エラーが発生しました",
                     description: data.message,
                     variant: "destructive",
