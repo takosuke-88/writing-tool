@@ -312,6 +312,7 @@ function ChatApp() {
         }
       }
     } catch (error) {
+      // Syntax error fixed
       console.error("Chat error:", error);
       toast({
         title: "エラーが発生しました",
