@@ -200,8 +200,22 @@ async function executeHighPrecisionSearch(query) {
 }
 
 // 2. Eco Search (Tavily)
-async function executeEcoSearch(query) {
-  if (!process.env.TAVILY_API_KEY) throw new Error("TAVILY_API_KEY missing");
+async function executeEcoSearch(query, clientTavilyKey) {
+  const apiKey = clientTavilyKey || process.env.TAVILY_API_KEY;
+
+  if (!apiKey) {
+    // Fallback to Perplexity (Standard Search / Sonar)
+    console.warn("Tavily API Key missing, falling back to Perplexity");
+    try {
+      if (process.env.PERPLEXITY_API_KEY) {
+        const result = await executeStandardSearch(query);
+        return `(Note: Eco Search unavailable, using fallback)\n${result}`;
+      }
+    } catch (e) {
+      console.error("Fallback search failed:", e);
+    }
+    throw new Error("TAVILY_API_KEY missing and fallback failed");
+  }
 
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
@@ -209,7 +223,7 @@ async function executeEcoSearch(query) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      api_key: process.env.TAVILY_API_KEY,
+      api_key: apiKey,
       query: query,
       search_depth: "basic",
       include_answer: true,
@@ -911,7 +925,10 @@ export default async function handler(req, res) {
                     );
                   }
                 } else if (tool.name === "eco_search") {
-                  result = await executeEcoSearch(args.query);
+                  result = await executeEcoSearch(
+                    args.query,
+                    req.body.tavilyApiKey,
+                  );
                 } else if (tool.name === "deep_analysis") {
                   result = await executeDeepAnalysis(args.topic);
                 }

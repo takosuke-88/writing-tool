@@ -30,6 +30,8 @@ interface ChatSettingsPanelProps {
   onSystemInstructionsOpenChange: (open: boolean) => void;
   searchMode: string;
   onSearchModeChange: (mode: string) => void;
+  tavilyApiKey: string;
+  onTavilyApiKeyChange: (key: string) => void;
 }
 
 const MODELS = [
@@ -76,6 +78,8 @@ export function ChatSettingsPanel({
   onSystemInstructionsOpenChange,
   searchMode,
   onSearchModeChange,
+  tavilyApiKey,
+  onTavilyApiKeyChange,
 }: ChatSettingsPanelProps) {
   const selectedModel = MODELS.find((m) => m.id === model);
 
@@ -142,6 +146,25 @@ export function ChatSettingsPanel({
               {searchMode === "eco" && "無料検索APIを使用 (低コスト)"}
             </p>
           </div>
+
+          {/* Tavily API Key Input - ADDED */}
+          {searchMode === "eco" && (
+            <div className="space-y-2 p-3 bg-blue-50 rounded-md border border-blue-100">
+              <Label className="text-sm font-medium text-[#202124]">
+                Tavily API Key (Eco検索用)
+              </Label>
+              <Input
+                type="password"
+                placeholder="tvly-..."
+                value={tavilyApiKey}
+                onChange={(e) => onTavilyApiKeyChange(e.target.value)}
+                className="bg-white border-[#dadce0] text-[#202124] h-8 text-xs"
+              />
+              <p className="text-[10px] text-[#5f6368]">
+                キーがない場合はPerplexityを代用します
+              </p>
+            </div>
+          )}
 
           {/* System Instructions */}
           <div className="space-y-2">

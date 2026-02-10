@@ -101,6 +101,10 @@ function ChatApp() {
     "chat-search-mode",
     "auto",
   );
+  const [tavilyApiKey, setTavilyApiKey] = useLocalStorage<string>(
+    "chat-tavily-api-key",
+    "",
+  );
 
   // Fix temperature if it's out of range (legacy values)
   useEffect(() => {
@@ -381,6 +385,8 @@ function ChatApp() {
         onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
         searchMode={searchMode}
         onSearchModeChange={setSearchMode}
+        tavilyApiKey={tavilyApiKey}
+        onTavilyApiKeyChange={setTavilyApiKey}
       />
     </div>
   );
