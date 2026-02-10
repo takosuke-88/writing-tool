@@ -21,6 +21,7 @@ interface ChatSidebarProps {
   onNewConversation: () => void;
   onDeleteConversation: (id: number) => void;
   onUpdateTitle: (id: number, title: string) => void;
+  onToggleSettings: () => void;
 }
 
 export function ChatSidebar({
@@ -30,6 +31,7 @@ export function ChatSidebar({
   onNewConversation,
   onDeleteConversation,
   onUpdateTitle,
+  onToggleSettings,
 }: ChatSidebarProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -173,6 +175,7 @@ export function ChatSidebar({
         <Button
           variant="ghost"
           className="w-full justify-start text-[#5f6368] hover:bg-[#f1f3f4] h-10"
+          onClick={onToggleSettings}
         >
           <Settings className="h-4 w-4 mr-2" />
           設定

@@ -101,6 +101,11 @@ function ChatApp() {
     "chat-search-mode",
     "auto",
   );
+  const [tavilyApiKey, setTavilyApiKey] = useLocalStorage<string>(
+    "chat-tavily-api-key",
+    "",
+  );
+  const [isSettingsOpen, setIsSettingsOpen] = useState(true); // Default open or closed? Maybe true if user is confused it's gone.
 
   // Fix temperature if it's out of range (legacy values)
   useEffect(() => {
@@ -349,6 +354,7 @@ function ChatApp() {
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
         onUpdateTitle={handleUpdateTitle}
+        onToggleSettings={() => setIsSettingsOpen((prev: boolean) => !prev)}
       />
 
       {/* Main Chat Area */}
@@ -366,22 +372,26 @@ function ChatApp() {
       />
 
       {/* Right Settings Panel */}
-      <ChatSettingsPanel
-        model={model}
-        temperature={temperature}
-        maxTokens={maxTokens}
-        topP={topP}
-        systemInstructions={systemInstructions}
-        isSystemInstructionsOpen={isSystemInstructionsOpen}
-        onModelChange={setModel}
-        onTemperatureChange={setTemperature}
-        onMaxTokensChange={setMaxTokens}
-        onTopPChange={setTopP}
-        onSystemInstructionsChange={setSystemInstructions}
-        onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
-        searchMode={searchMode}
-        onSearchModeChange={setSearchMode}
-      />
+      {isSettingsOpen && (
+        <ChatSettingsPanel
+          model={model}
+          temperature={temperature}
+          maxTokens={maxTokens}
+          topP={topP}
+          systemInstructions={systemInstructions}
+          isSystemInstructionsOpen={isSystemInstructionsOpen}
+          onModelChange={setModel}
+          onTemperatureChange={setTemperature}
+          onMaxTokensChange={setMaxTokens}
+          onTopPChange={setTopP}
+          onSystemInstructionsChange={setSystemInstructions}
+          onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
+          searchMode={searchMode}
+          onSearchModeChange={setSearchMode}
+          tavilyApiKey={tavilyApiKey}
+          onTavilyApiKeyChange={setTavilyApiKey}
+        />
+      )}
     </div>
   );
 }
