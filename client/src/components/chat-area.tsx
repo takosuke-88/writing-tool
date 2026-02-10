@@ -147,12 +147,17 @@ export function ChatArea({
               </p>
             </div>
           ) : (
-            messages.map((message) => (
+            messages.map((message, index) => (
               <MessageBubble
                 key={message.id}
                 role={message.role as "user" | "assistant"}
                 content={message.content}
                 createdAt={message.createdAt}
+                isLoading={
+                  isGenerating &&
+                  index === messages.length - 1 &&
+                  message.role === "assistant"
+                }
               />
             ))
           )}
