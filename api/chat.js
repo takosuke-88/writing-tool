@@ -138,18 +138,19 @@ const TOOLS = [
 ];
 
 // Footer Helper
-function createFooter(model, usedTools = [], debugInfo = {}) {
+function createFooter(model, usedTools = [], ecoSearchQuery = null) {
+  const toolNames = [
+    ...new Set(usedTools.map((t) => (typeof t === "string" ? t : t.name))),
+  ];
+
   const toolsInfo =
-    usedTools.length > 0
-      ? `\nTools: ${[...new Set(usedTools)].join(", ")}`
-      : "";
+    toolNames.length > 0 ? `\nTools: ${toolNames.join(", ")}` : "";
 
-  const debugStr =
-    Object.keys(debugInfo).length > 0
-      ? `\n\n[Debug Info]\n${JSON.stringify(debugInfo, null, 2)}`
-      : "";
+  const ecoSearchInfo = ecoSearchQuery
+    ? `\n\n【eco_search: ${ecoSearchQuery}】`
+    : "";
 
-  return `\n\n---\nModel: ${model}${toolsInfo}${debugStr}`;
+  return `\n\n---\nModel: ${model}${toolsInfo}${ecoSearchInfo}`;
 }
 
 // --- Search Executors ---
@@ -449,15 +450,8 @@ async function streamPerplexity(
     // ... (skipping unchanged code) ...
 
     // Append Footer
-    const debugInfo = {
-      appliedModel: model,
-      appliedTemp,
-      appliedTopP,
-      systemInstructionSent: !!(
-        systemInstructions && systemInstructions.trim()
-      ),
-    };
-    const footer = createFooter(model, ["Perplexity (Native)"], debugInfo);
+    // Debug Info Removed
+    const footer = createFooter(model, ["Perplexity (Native)"]);
     res.write(`data: ${JSON.stringify({ type: "content", text: footer })}\n\n`);
 
     res.write("data: [DONE]\n\n");
@@ -649,17 +643,12 @@ async function streamGemini(
     }
 
     // Append Footer
-    const debugInfo = {
-      appliedModel: model,
-      appliedTemp: appliedTemp,
-      appliedTopP: appliedTopP,
-      systemInstructionSent: !!requestBody.systemInstruction,
-    };
+    // Debug Info Removed
 
-    // Send Debug Info
-    res.write(
-      `data: ${JSON.stringify({ type: "debug", data: debugInfo })}\n\n`,
-    );
+    // Send Debug Info (REMOVED)
+    // res.write(
+    //   `data: ${JSON.stringify({ type: "debug", data: debugInfo })}\n\n`,
+    // );
 
     const footer = createFooter(model, []);
     res.write(`data: ${JSON.stringify({ type: "content", text: footer })}\n\n`);
@@ -734,6 +723,7 @@ export default async function handler(req, res) {
 1. high_precision_search: 複雑なトピック、最新ニュース、深い調査が必要な場合に使用してください（Perplexity使用）。
 2. standard_search: 一般的な情報検索に使用してください。
 3. eco_search: 単純な事実確認、天気、定義などの簡単な検索に使用してください（Tavily使用）。
+   【重要】回答の冒頭に【eco_search: ...】のようなツール使用の宣言を絶対に入れないでください。省略してください。
 
 ユーザーの質問の複雑さと重要度に応じて、最も適切でコスト対効果の高いツールを選択してください。`;
     } else if (searchMode === "high_precision") {
@@ -812,6 +802,7 @@ export default async function handler(req, res) {
     let isFinalResponse = false;
     let iteration = 0;
     const usedTools = []; // Track used tools
+    let ecoSearchQuery = null;
 
     while (!isFinalResponse && iteration < 3) {
       iteration++;
@@ -875,6 +866,7 @@ export default async function handler(req, res) {
           role: "assistant",
           content: finalMessage.content,
         });
+
         const toolResults = await Promise.all(
           finalMessage.content
             .filter((c) => c.type === "tool_use")
@@ -882,6 +874,12 @@ export default async function handler(req, res) {
               let result = "";
               try {
                 const args = tool.input;
+
+                // Capture eco_search query for footer
+                if (tool.name === "eco_search" && args.query) {
+                  ecoSearchQuery = args.query;
+                }
+
                 if (tool.name === "high_precision_search") {
                   try {
                     result = await executeHighPrecisionSearch(args.query);
@@ -970,14 +968,8 @@ export default async function handler(req, res) {
       } else {
         isFinalResponse = true;
         // Append Footer
-        const debugInfo = {
-          appliedModel: model,
-          appliedTemp: safeTemp,
-          systemInstructionSent: !!(
-            systemInstructions && systemInstructions.trim()
-          ),
-        };
-        const footer = createFooter(model, usedTools, debugInfo);
+        const footer = createFooter(model, usedTools, ecoSearchQuery);
+
         res.write(
           `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
         );
