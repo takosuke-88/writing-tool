@@ -714,11 +714,12 @@ export default async function handler(req, res) {
     } = req.body;
 
     // --- Search Routing System Prompt Injection ---
-    let systemInstructions = userSystemInstructions || "";
+    // --- Search Routing System Prompt Injection ---
+    let searchInstructions = "";
     let effectiveTools = TOOLS;
 
     if (searchMode === "auto") {
-      systemInstructions += `\n\n【検索ツールの使い分けについて】
+      searchInstructions = `【検索ツールの使い分けについて】
 あなたは以下の3つの検索ツールを使用できます：
 1. high_precision_search: 複雑なトピック、最新ニュース、深い調査が必要な場合に使用してください（Perplexity使用）。
 2. standard_search: 一般的な情報検索に使用してください。
@@ -727,20 +728,27 @@ export default async function handler(req, res) {
 
 ユーザーの質問の複雑さと重要度に応じて、最も適切でコスト対効果の高いツールを選択してください。`;
     } else if (searchMode === "high_precision") {
-      systemInstructions += `\n\n【検索について】必ず 'high_precision_search' を使用してください。`;
+      searchInstructions = `【検索について】必ず 'high_precision_search' を使用してください。`;
       effectiveTools = TOOLS.filter(
         (t) => t.name === "high_precision_search" || t.name === "deep_analysis",
       );
     } else if (searchMode === "standard") {
-      systemInstructions += `\n\n【検索について】必ず 'standard_search' を使用してください。`;
+      searchInstructions = `【検索について】必ず 'standard_search' を使用してください。`;
       effectiveTools = TOOLS.filter(
         (t) => t.name === "standard_search" || t.name === "deep_analysis",
       );
     } else if (searchMode === "eco") {
-      systemInstructions += `\n\n【検索について】必ず 'eco_search' を使用してください。`;
+      searchInstructions = `【検索について】必ず 'eco_search' を使用してください。`;
       effectiveTools = TOOLS.filter(
         (t) => t.name === "eco_search" || t.name === "deep_analysis",
       );
+    }
+
+    // Combine instructions: Search Instructions FIRST, User Instructions LAST (for priority)
+    let systemInstructions = searchInstructions;
+    if (userSystemInstructions) {
+      if (systemInstructions) systemInstructions += "\n\n---\n\n";
+      systemInstructions += userSystemInstructions;
     }
 
     // --- STRICT PARAMETER PARSING ---
