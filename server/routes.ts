@@ -383,6 +383,91 @@ export async function registerRoutes(
     if (model === "claude-sonnet-4-5") model = "claude-sonnet-4-5-20250929";
     return model;
   };
+  const detectSearchTag = (
+    text: string,
+  ): { tool: "eco_search" | "high_precision_search" | "standard_search"; query: string } | null => {
+    const tagRegex =
+      /[【\[]\s*(eco_search|high_precision_search|standard_search)\s*(?:[:：]\s*([\s\S]*?))?[】\]]/i;
+    const m = text.match(tagRegex);
+    if (!m) return null;
+    const tool = m[1] as
+      | "eco_search"
+      | "high_precision_search"
+      | "standard_search";
+    const query = (m[2] || "").trim();
+    return { tool, query };
+  };
+  const execEcoSearch = async (query: string, clientTavilyKey?: string) => {
+    const apiKey = clientTavilyKey || process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      if (process.env.PERPLEXITY_API_KEY) {
+        return await execStandardSearch(query);
+      }
+      throw new Error("TAVILY_API_KEY missing");
+    }
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        search_depth: "basic",
+        include_answer: true,
+        max_results: 3,
+      }),
+    });
+    if (!res.ok) throw new Error(`Tavily API Error: ${res.status}`);
+    const data = await res.json();
+    return (
+      data.answer ||
+      data.results?.map((r: any) => `${r.title}: ${r.content}`).join("\n\n") ||
+      "No results"
+    );
+  };
+  const execHighPrecisionSearch = async (query: string) => {
+    if (!process.env.PERPLEXITY_API_KEY)
+      throw new Error("PERPLEXITY_API_KEY missing");
+    const res = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "sonar-pro",
+        messages: [
+          { role: "user", content: `以下について簡潔に検索結果をまとめてください: ${query}` },
+        ],
+        return_citations: false,
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      if (res.status === 429 || res.status === 402) {
+        throw new Error("PERPLEXITY_QUOTA_EXCEEDED");
+      }
+      throw new Error(`Perplexity API Error: ${res.status} ${errText}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || "No results";
+  };
+  const execStandardSearch = async (query: string) => {
+    if (!process.env.PERPLEXITY_API_KEY) throw new Error("API Key missing");
+    const res = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "sonar",
+        messages: [{ role: "user", content: query }],
+      }),
+    });
+    if (!res.ok) throw new Error(`Perplexity API Error: ${res.status}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || "";
+  };
   app.post("/api/chat", async (req, res) => {
     try {
       const {
@@ -465,12 +550,70 @@ export async function registerRoutes(
           return res.end();
         }
         const data = await response.json();
-        const text =
-          data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const tag = detectSearchTag(String(text));
+        if (tag) {
+          const before = String(text).replace(
+            /[【\[]\s*(eco_search|high_precision_search|standard_search)[\s\S]*?[】\]]/i,
+            "",
+          );
+          const cleanedBefore = sanitizeChunk(before);
+          if (cleanedBefore) {
+            res.write(
+              `data: ${JSON.stringify({
+                type: "content",
+                text: cleanedBefore,
+              })}\n\n`,
+            );
+          }
+          let results = "";
+          try {
+            if (tag.tool === "eco_search") {
+              results = await execEcoSearch(tag.query);
+            } else if (tag.tool === "high_precision_search") {
+              results = await execHighPrecisionSearch(tag.query);
+            } else {
+              results = await execStandardSearch(tag.query);
+            }
+          } catch (e: any) {
+            results = `(検索失敗: ${e?.message || "unknown"})`;
+          }
+          const continuationBody: any = {
+            contents: [
+              { role: "user", parts: [{ text: `以下の検索結果を参考に、先ほどの回答の続きを作成してください。\n\n${results}\n\n注意: タグや署名は含めないでください。` }] },
+            ],
+            generationConfig: {
+              maxOutputTokens: maxTokensParam,
+              temperature: tempParam,
+              topP: topPParam,
+            },
+          };
+          if (systemInstructions && String(systemInstructions).trim()) {
+            continuationBody.systemInstruction = {
+              parts: [{ text: String(systemInstructions) }],
+            };
+          }
+          const contRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(continuationBody),
+            },
+          );
+          if (contRes.ok) {
+            const contData = await contRes.json();
+            text = contData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          } else {
+            text = "";
+          }
+        }
         const cleaned = sanitizeChunk(String(text || ""));
-        res.write(
-          `data: ${JSON.stringify({ type: "content", text: cleaned })}\n\n`,
-        );
+        if (cleaned) {
+          res.write(
+            `data: ${JSON.stringify({ type: "content", text: cleaned })}\n\n`,
+          );
+        }
         const footer = createFooter(model, searchMode);
         res.write(
           `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
@@ -499,20 +642,80 @@ export async function registerRoutes(
           temperature: tempParam,
           top_p: topPParam,
         });
+        let assistantAccum = "";
+        let scanBuffer = "";
+        let toolCalls = 0;
+        const maxToolCalls = 3;
+        let tagDetected: ReturnType<typeof detectSearchTag> | null = null;
         for await (const event of stream) {
           if (
             event.type === "content_block_delta" &&
             (event as any).delta?.type === "text_delta"
           ) {
             const content = (event as any).delta?.text || "";
+            scanBuffer = (scanBuffer + content).slice(-4000);
+            const tag = detectSearchTag(scanBuffer);
+            if (!tagDetected && tag && toolCalls < maxToolCalls) {
+              tagDetected = tag;
+              continue;
+            }
             const cleaned = sanitizeChunk(String(content));
             if (cleaned) {
+              assistantAccum += cleaned;
               res.write(
                 `data: ${JSON.stringify({
                   type: "content",
                   text: cleaned,
                 })}\n\n`,
               );
+            }
+          }
+        }
+        if (tagDetected && toolCalls < maxToolCalls) {
+          toolCalls++;
+          let results = "";
+          try {
+            if (tagDetected.tool === "eco_search") {
+              results = await execEcoSearch(tagDetected.query);
+            } else if (tagDetected.tool === "high_precision_search") {
+              results = await execHighPrecisionSearch(tagDetected.query);
+            } else {
+              results = await execStandardSearch(tagDetected.query);
+            }
+          } catch (e: any) {
+            results = `(検索失敗: ${e?.message || "unknown"})`;
+          }
+          const continuationMessages = [
+            ...chatMessages,
+            { role: "assistant" as const, content: assistantAccum },
+            {
+              role: "user" as const,
+              content: `以下の検索結果を参考に、先ほどの回答の続きを作成してください。\n\n${results}\n\n注意: タグや署名は含めないでください。`,
+            },
+          ];
+          const contStream = anthropic.messages.stream({
+            model,
+            max_tokens: maxTokensParam,
+            messages: continuationMessages,
+            system: systemInstructions ? String(systemInstructions) : undefined,
+            temperature: tempParam,
+            top_p: topPParam,
+          });
+          for await (const event of contStream) {
+            if (
+              event.type === "content_block_delta" &&
+              (event as any).delta?.type === "text_delta"
+            ) {
+              const content = (event as any).delta?.text || "";
+              const cleaned = sanitizeChunk(String(content));
+              if (cleaned) {
+                res.write(
+                  `data: ${JSON.stringify({
+                    type: "content",
+                    text: cleaned,
+                  })}\n\n`,
+                );
+              }
             }
           }
         }
