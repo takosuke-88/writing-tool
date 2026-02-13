@@ -166,6 +166,11 @@ function createFooter(model, usedTools = [], ecoSearchQuery = null) {
 
   const displayModel = formatModelName(model);
 
+  // User Requested Format:
+  // ---
+  // Search Model: [Name]
+  // Model: [Name]
+
   let footer = `\n\n---\n`;
   if (searchModel) {
     footer += `Search Model: ${searchModel}\n`;
@@ -775,10 +780,19 @@ export default async function handler(req, res) {
 
     // --- FORMATTING INSTRUCTIONS (Prevent Self-Metadata) ---
     const noMetadataInstruction = `
-【重要：出力制約】
-1. 思考プロセスやツール使用タグ（例: \`【eco_search...】\`）は **完全に出力から除外** してください。
-2. 回答の末尾に署名や「Model: ...」を含めないでください。これらはシステムが自動的に付与します。
-3. ユーザーには最終的な回答文章のみを提示してください。
+# Role & Goal
+あなたは優秀なライティングアシスタントです。ユーザーの要望に合わせてテキストを生成します。
+
+# Critical Constraints (絶対遵守事項)
+
+1. **【重要】検索コマンドの完全隠蔽**
+   - 思考過程で使用する \`【eco_search: ...】\` などのタグやコマンドは、**最終出力には一切含めないでください**。
+   - ユーザーに見せるのは「検索結果を踏まえた自然な回答テキスト」のみです。
+
+2. **【重要】署名フォーマットの重複防止**
+   - 回答の末尾に、署名や「Model: ...」を**AI自身が生成することは禁止**します。
+   - これらはシステムが自動的に正しいフォーマットで付与するため、AIが書くと重複してしまいます。
+   - **署名はシステムに任せ、回答本文のみを出力してください。**
 `;
 
     if (systemInstructions) {
