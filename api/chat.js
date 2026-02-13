@@ -152,16 +152,27 @@ function createFooter(model, usedTools = [], ecoSearchQuery = null) {
     ...new Set(usedTools.map((t) => (typeof t === "string" ? t : t.name))),
   ];
 
-  const toolsInfo =
-    toolNames.length > 0 ? `\nTools: ${toolNames.join(", ")}` : "";
-
-  const ecoSearchInfo = ecoSearchQuery
-    ? `\n\n【eco_search: ${ecoSearchQuery}】`
-    : "";
+  // Determine Search Model Name based on tools used
+  let searchModel = null;
+  if (toolNames.includes("high_precision_search")) {
+    searchModel = "perplexity";
+  } else if (toolNames.includes("eco_search")) {
+    searchModel = "eco_search";
+  } else if (toolNames.includes("standard_search")) {
+    searchModel = "standard_search";
+  } else if (toolNames.includes("deep_analysis")) {
+    searchModel = "gemini";
+  }
 
   const displayModel = formatModelName(model);
 
-  return `\n\nModel: ${displayModel}${toolsInfo}${ecoSearchInfo}`;
+  let footer = `\n\n---\n`;
+  if (searchModel) {
+    footer += `Search Model: ${searchModel}\n`;
+  }
+  footer += `Model: ${displayModel}`;
+
+  return footer;
 }
 
 // --- Search Executors ---
@@ -764,9 +775,10 @@ export default async function handler(req, res) {
 
     // --- FORMATTING INSTRUCTIONS (Prevent Self-Metadata) ---
     const noMetadataInstruction = `
-【重要】
-1. 回答の冒頭に【eco_search: ...】のようなツール使用宣言を含めないでください。
-2. 回答の末尾に「Model: ...」やツール名などのメタデータを含めないでください。これはシステムが自動的に付与します。
+【重要：出力制約】
+1. 思考プロセスやツール使用タグ（例: \`【eco_search...】\`）は **完全に出力から除外** してください。
+2. 回答の末尾に署名や「Model: ...」を含めないでください。これらはシステムが自動的に付与します。
+3. ユーザーには最終的な回答文章のみを提示してください。
 `;
 
     if (systemInstructions) {
