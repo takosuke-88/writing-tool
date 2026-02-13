@@ -115,7 +115,13 @@ export function getMockConversationWithMessages(
 
   return {
     ...conversation,
-    messages: mockMessages[id] || [],
+    messages: (mockMessages[id] || []).map((m) => ({
+      id: m.id,
+      conversationId: m.conversationId,
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+      createdAt: m.createdAt,
+    })),
   };
 }
 

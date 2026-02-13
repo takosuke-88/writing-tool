@@ -6,7 +6,7 @@ import {
   generateArticleRequestSchema,
   insertSystemPromptSchema,
 } from "@shared/schema";
-import chatHandler from "../api/chat.js";
+ 
 
 const anthropic = new Anthropic({
   apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
@@ -356,10 +356,181 @@ export async function registerRoutes(
   // NOTE: /api/stats is handled by api/stats.js (Serverless Function) using Vercel KV.
   // We do not implement it here to avoid PostgreSQL dependencies for stats.
 
-  // Register /api/chat for local development
-  // Direct import for proper hot module replacement
-  // @ts-ignore - JS module without type declarations
-  app.post("/api/chat", chatHandler);
+  const sanitizeChunk = (text: string): string => {
+    const thinkingTags = /[【\[]\s*(?:eco_search|high_precision_search|standard_search|deep_analysis)[\s\S]*?[】\]]/gi;
+    const signatureLines = /^\s*(?:Search Model|Model)\s*:[^\n]*$/gmi;
+    const separatorLines = /^\s*---\s*$/gmi;
+    return text
+      .replace(thinkingTags, "")
+      .replace(signatureLines, "")
+      .replace(separatorLines, "");
+  };
+  const formatModelName = (model: string): string =>
+    model.replace(/-20\d{6}$/, "").replace(/-\d{8}$/, "").trim();
+  const createFooter = (model: string, searchMode?: string): string => {
+    const displayModel = formatModelName(model);
+    let searchModel: string | null = null;
+    if (searchMode === "high_precision") searchModel = "perplexity";
+    else if (searchMode === "eco") searchModel = "eco_search";
+    else if (searchMode === "standard") searchModel = "standard_search";
+    let footer = `\n\n---\n`;
+    if (searchModel) footer += `Search Model: ${searchModel}\n\n`;
+    footer += `Model: ${displayModel}`;
+    return footer;
+  };
+  const normalizeModel = (requested?: string): string => {
+    let model = requested || "claude-sonnet-4-5";
+    if (model === "claude-sonnet-4-5") model = "claude-sonnet-4-5-20250929";
+    return model;
+  };
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const {
+        messages,
+        model: requestedModel,
+        temperature,
+        maxTokens,
+        topP,
+        systemInstructions,
+        searchMode,
+      } = req.body || {};
+      const model = normalizeModel(requestedModel);
+      const tempParam =
+        typeof temperature === "number"
+          ? Math.max(0, Math.min(200, temperature)) / 100
+          : 0.7;
+      const topPParam =
+        typeof topP === "number"
+          ? Math.max(0, Math.min(100, topP)) / 100
+          : 0.8;
+      const maxTokensParam =
+        typeof maxTokens === "number" ? maxTokens : 2048;
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.write(
+        `data: ${JSON.stringify({ type: "model_selected", model })}\n\n`,
+      );
+      const isGemini = model.includes("gemini");
+      if (isGemini) {
+        const apiKey =
+          process.env.AI_INTEGRATIONS_GOOGLE_API_KEY ||
+          process.env.GOOGLE_API_KEY;
+        if (!apiKey) {
+          res.write(
+            `data: ${JSON.stringify({
+              type: "error",
+              message: "Gemini API Key missing",
+            })}\n\n`,
+          );
+          res.write("data: [DONE]\n\n");
+          return res.end();
+        }
+        const lastUser = Array.isArray(messages)
+          ? messages.filter((m: any) => m && m.role === "user").slice(-1)[0]
+          : null;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const requestBody: any = {
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: lastUser?.content || "" }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: maxTokensParam,
+            temperature: tempParam,
+            topP: topPParam,
+          },
+        };
+        if (systemInstructions && String(systemInstructions).trim()) {
+          requestBody.systemInstruction = {
+            parts: [{ text: String(systemInstructions) }],
+          };
+        }
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          res.write(
+            `data: ${JSON.stringify({
+              type: "error",
+              message: errText || `Gemini API Error: ${response.status}`,
+            })}\n\n`,
+          );
+          res.write("data: [DONE]\n\n");
+          return res.end();
+        }
+        const data = await response.json();
+        const text =
+          data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const cleaned = sanitizeChunk(String(text || ""));
+        res.write(
+          `data: ${JSON.stringify({ type: "content", text: cleaned })}\n\n`,
+        );
+        const footer = createFooter(model, searchMode);
+        res.write(
+          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+        );
+        res.write("data: [DONE]\n\n");
+        return res.end();
+      } else {
+        const chatMessages = Array.isArray(messages)
+          ? messages
+              .filter(
+                (m: any) =>
+                  m && typeof m.content === "string" && m.content.trim() !== "",
+              )
+              .map((m: any) => ({
+                role: (m.role === "assistant" ? "assistant" : "user") as
+                  | "user"
+                  | "assistant",
+                content: String(m.content),
+              }))
+          : [];
+        const stream = anthropic.messages.stream({
+          model,
+          max_tokens: maxTokensParam,
+          messages: chatMessages,
+          system: systemInstructions ? String(systemInstructions) : undefined,
+          temperature: tempParam,
+          top_p: topPParam,
+        });
+        for await (const event of stream) {
+          if (
+            event.type === "content_block_delta" &&
+            (event as any).delta?.type === "text_delta"
+          ) {
+            const content = (event as any).delta?.text || "";
+            const cleaned = sanitizeChunk(String(content));
+            if (cleaned) {
+              res.write(
+                `data: ${JSON.stringify({
+                  type: "content",
+                  text: cleaned,
+                })}\n\n`,
+              );
+            }
+          }
+        }
+        const footer = createFooter(model, searchMode);
+        res.write(
+          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+        );
+        res.write("data: [DONE]\n\n");
+        return res.end();
+      }
+    } catch (error: any) {
+      const message =
+        error?.message || "Internal Error in chat processing";
+      res.write(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      return res.end();
+    }
+  });
 
   return httpServer;
 }
