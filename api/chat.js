@@ -138,6 +138,15 @@ const TOOLS = [
 ];
 
 // Footer Helper
+function formatModelName(model) {
+  // Remove date suffix more robustly (e.g. -20240307, -20250929)
+  // Also trims potential whitespace
+  return model
+    .replace(/-20\d{6}$/, "")
+    .replace(/-\d{8}$/, "")
+    .trim();
+}
+
 function createFooter(model, usedTools = [], ecoSearchQuery = null) {
   const toolNames = [
     ...new Set(usedTools.map((t) => (typeof t === "string" ? t : t.name))),
@@ -150,7 +159,9 @@ function createFooter(model, usedTools = [], ecoSearchQuery = null) {
     ? `\n\n【eco_search: ${ecoSearchQuery}】`
     : "";
 
-  return `\n\n---\nModel: ${model}${toolsInfo}${ecoSearchInfo}`;
+  const displayModel = formatModelName(model);
+
+  return `\n\nModel: ${displayModel}${toolsInfo}${ecoSearchInfo}`;
 }
 
 // --- Search Executors ---
@@ -749,6 +760,19 @@ export default async function handler(req, res) {
     if (userSystemInstructions) {
       if (systemInstructions) systemInstructions += "\n\n---\n\n";
       systemInstructions += userSystemInstructions;
+    }
+
+    // --- FORMATTING INSTRUCTIONS (Prevent Self-Metadata) ---
+    const noMetadataInstruction = `
+【重要】
+1. 回答の冒頭に【eco_search: ...】のようなツール使用宣言を含めないでください。
+2. 回答の末尾に「Model: ...」やツール名などのメタデータを含めないでください。これはシステムが自動的に付与します。
+`;
+
+    if (systemInstructions) {
+      systemInstructions += "\n\n---\n\n" + noMetadataInstruction;
+    } else {
+      systemInstructions = noMetadataInstruction;
     }
 
     // --- STRICT PARAMETER PARSING ---
