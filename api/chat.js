@@ -171,9 +171,11 @@ function createFooter(model, usedTools = [], ecoSearchQuery = null) {
   // Search Model: [Name]
   // Model: [Name]
 
+  // IMPORTANT: \n\n is required for Markdown to render new paragraphs.
+  // Or two spaces at end of line for line break. We use \n\n for safety.
   let footer = `\n\n---\n`;
   if (searchModel) {
-    footer += `Search Model: ${searchModel}\n`;
+    footer += `Search Model: ${searchModel}\n\n`; // Double newline for MD
   }
   footer += `Model: ${displayModel}`;
 
@@ -779,6 +781,8 @@ export default async function handler(req, res) {
     }
 
     // --- FORMATTING INSTRUCTIONS (Prevent Self-Metadata) ---
+    // User reported duplication, meaning AI is still generating metadata.
+    // Strengthening the prompt further.
     const noMetadataInstruction = `
 # Role & Goal
 あなたは優秀なライティングアシスタントです。ユーザーの要望に合わせてテキストを生成します。
@@ -795,6 +799,7 @@ export default async function handler(req, res) {
    - **署名はシステムに任せ、回答本文のみを出力してください。**
 `;
 
+    // Append formatting instructions at the very end to ensure they aren't overridden
     if (systemInstructions) {
       systemInstructions += "\n\n---\n\n" + noMetadataInstruction;
     } else {
