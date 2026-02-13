@@ -358,7 +358,7 @@ export async function registerRoutes(
 
   const sanitizeChunk = (text: string): string => {
     const thinkingTags = /[【\[]\s*(?:eco_search|high_precision_search|standard_search|deep_analysis)[\s\S]*?[】\]]/gi;
-    const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gmi;
+    const signatureLines = /^\s*(?:Search Model|Model)\s*:[^\n]*$/gmi;
     const separatorLines = /^\s*---\s*$/gmi;
     return text
       .replace(thinkingTags, "")
@@ -383,36 +383,6 @@ export async function registerRoutes(
     if (model === "claude-sonnet-4-5") model = "claude-sonnet-4-5-20250929";
     return model;
   };
-  const sanitizeHistory = (history: any[]) => {
-    const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gmi;
-    const separatorLines = /^\s*---\s*$/gmi;
-    return (Array.isArray(history) ? history : [])
-      .map((m) => {
-        if (!m) return m;
-        if (m.role === "assistant" && typeof m.content === "string") {
-          const cleaned = m.content
-            .replace(signatureLines, "")
-            .replace(separatorLines, "")
-            .trim();
-          return { ...m, content: cleaned };
-        }
-        return m;
-      })
-      .filter((m) => !m || typeof m.content !== "string" || m.content.trim() !== "");
-  };
-  const buildSystemInstruction = (
-    base: unknown,
-    searchMode?: string,
-    forceSearch?: boolean,
-  ) => {
-    const baseText = base ? String(base) : "";
-    if (!searchMode || searchMode === "auto") return baseText;
-    const modeText = forceSearch
-      ? `\n\n【検索モード】\n現在の検索モードは ${searchMode} です。検索はシステム側で実行します。検索タグや署名は出力しないでください。`
-      : `\n\n【検索モード】\n現在の検索モードは ${searchMode} です。このモードで検索タグを出力してください。`;
-    return `${baseText}${modeText}`.trim();
-  };
-  const buildInjectedContext = (results: string) => `【検索結果】\n${results}`;
   const detectSearchTag = (
     text: string,
   ): { tool: "eco_search" | "high_precision_search" | "standard_search"; query: string } | null => {
@@ -508,7 +478,6 @@ export async function registerRoutes(
         topP,
         systemInstructions,
         searchMode,
-        tavilyApiKey,
       } = req.body || {};
       const model = normalizeModel(requestedModel);
       const tempParam =
@@ -521,37 +490,6 @@ export async function registerRoutes(
           : 0.8;
       const maxTokensParam =
         typeof maxTokens === "number" ? maxTokens : 2048;
-      const sanitizedMessages = sanitizeHistory(messages);
-      const lastUser = sanitizedMessages
-        .filter((m: any) => m && m.role === "user")
-        .slice(-1)[0];
-      const forceSearch = searchMode && searchMode !== "auto";
-      let injectedResults = "";
-      if (forceSearch && lastUser?.content) {
-        try {
-          if (searchMode === "eco") {
-            injectedResults = await execEcoSearch(
-              String(lastUser.content),
-              tavilyApiKey,
-            );
-          } else if (searchMode === "high_precision") {
-            injectedResults = await execHighPrecisionSearch(
-              String(lastUser.content),
-            );
-          } else if (searchMode === "standard") {
-            injectedResults = await execStandardSearch(
-              String(lastUser.content),
-            );
-          }
-        } catch (e: any) {
-          injectedResults = `(検索失敗: ${e?.message || "unknown"})`;
-        }
-      }
-      const systemInstruction = buildSystemInstruction(
-        systemInstructions,
-        searchMode,
-        !!forceSearch,
-      );
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
@@ -573,15 +511,15 @@ export async function registerRoutes(
           res.write("data: [DONE]\n\n");
           return res.end();
         }
-        const userText = injectedResults
-          ? `${buildInjectedContext(injectedResults)}\n\n${lastUser?.content || ""}`
-          : String(lastUser?.content || "");
+        const lastUser = Array.isArray(messages)
+          ? messages.filter((m: any) => m && m.role === "user").slice(-1)[0]
+          : null;
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const requestBody: any = {
           contents: [
             {
               role: "user",
-              parts: [{ text: userText }],
+              parts: [{ text: lastUser?.content || "" }],
             },
           ],
           generationConfig: {
@@ -590,9 +528,9 @@ export async function registerRoutes(
             topP: topPParam,
           },
         };
-        if (systemInstruction) {
+        if (systemInstructions && String(systemInstructions).trim()) {
           requestBody.systemInstruction = {
-            parts: [{ text: systemInstruction }],
+            parts: [{ text: String(systemInstructions) }],
           };
         }
         const response = await fetch(url, {
@@ -613,9 +551,8 @@ export async function registerRoutes(
         }
         const data = await response.json();
         let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        if (!injectedResults) {
-          const tag = detectSearchTag(String(text));
-          if (tag) {
+        const tag = detectSearchTag(String(text));
+        if (tag) {
           const before = String(text).replace(
             /[【\[]\s*(eco_search|high_precision_search|standard_search)[\s\S]*?[】\]]/i,
             "",
@@ -632,7 +569,7 @@ export async function registerRoutes(
           let results = "";
           try {
             if (tag.tool === "eco_search") {
-                results = await execEcoSearch(tag.query, tavilyApiKey);
+              results = await execEcoSearch(tag.query);
             } else if (tag.tool === "high_precision_search") {
               results = await execHighPrecisionSearch(tag.query);
             } else {
@@ -643,14 +580,7 @@ export async function registerRoutes(
           }
           const continuationBody: any = {
             contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      text: `${buildInjectedContext(results)}\n\n先ほどの回答の続きを作成してください。`,
-                    },
-                  ],
-                },
+              { role: "user", parts: [{ text: `以下の検索結果を参考に、先ほどの回答の続きを作成してください。\n\n${results}\n\n注意: タグや署名は含めないでください。` }] },
             ],
             generationConfig: {
               maxOutputTokens: maxTokensParam,
@@ -658,11 +588,11 @@ export async function registerRoutes(
               topP: topPParam,
             },
           };
-            if (systemInstruction) {
-              continuationBody.systemInstruction = {
-                parts: [{ text: systemInstruction }],
-              };
-            }
+          if (systemInstructions && String(systemInstructions).trim()) {
+            continuationBody.systemInstruction = {
+              parts: [{ text: String(systemInstructions) }],
+            };
+          }
           const contRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
@@ -671,12 +601,11 @@ export async function registerRoutes(
               body: JSON.stringify(continuationBody),
             },
           );
-            if (contRes.ok) {
-              const contData = await contRes.json();
-              text = contData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            } else {
-              text = "";
-            }
+          if (contRes.ok) {
+            const contData = await contRes.json();
+            text = contData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          } else {
+            text = "";
           }
         }
         const cleaned = sanitizeChunk(String(text || ""));
@@ -692,41 +621,24 @@ export async function registerRoutes(
         res.write("data: [DONE]\n\n");
         return res.end();
       } else {
-        const chatMessages = sanitizedMessages
-          .filter(
-            (m: any) =>
-              m && typeof m.content === "string" && m.content.trim() !== "",
-          )
-          .map((m: any) => ({
-            role: (m.role === "assistant" ? "assistant" : "user") as
-              | "user"
-              | "assistant",
-            content: String(m.content),
-          }));
-        const injectedMessage = injectedResults
-          ? { role: "user" as const, content: buildInjectedContext(injectedResults) }
-          : null;
-        let lastUserIndex = -1;
-        for (let i = chatMessages.length - 1; i >= 0; i--) {
-          if (chatMessages[i].role === "user") {
-            lastUserIndex = i;
-            break;
-          }
-        }
-        const chatMessagesWithInjection =
-          injectedMessage && lastUserIndex >= 0
-            ? [
-                ...chatMessages.slice(0, lastUserIndex),
-                injectedMessage,
-                chatMessages[lastUserIndex],
-                ...chatMessages.slice(lastUserIndex + 1),
-              ]
-            : chatMessages;
+        const chatMessages = Array.isArray(messages)
+          ? messages
+              .filter(
+                (m: any) =>
+                  m && typeof m.content === "string" && m.content.trim() !== "",
+              )
+              .map((m: any) => ({
+                role: (m.role === "assistant" ? "assistant" : "user") as
+                  | "user"
+                  | "assistant",
+                content: String(m.content),
+              }))
+          : [];
         const stream = anthropic.messages.stream({
           model,
           max_tokens: maxTokensParam,
-          messages: chatMessagesWithInjection,
-          system: systemInstruction || undefined,
+          messages: chatMessages,
+          system: systemInstructions ? String(systemInstructions) : undefined,
           temperature: tempParam,
           top_p: topPParam,
         });
@@ -735,7 +647,6 @@ export async function registerRoutes(
         let toolCalls = 0;
         const maxToolCalls = 3;
         let tagDetected: ReturnType<typeof detectSearchTag> | null = null;
-        const allowTagDetection = !injectedResults;
         for await (const event of stream) {
           if (
             event.type === "content_block_delta" &&
@@ -743,12 +654,10 @@ export async function registerRoutes(
           ) {
             const content = (event as any).delta?.text || "";
             scanBuffer = (scanBuffer + content).slice(-4000);
-            if (allowTagDetection) {
-              const tag = detectSearchTag(scanBuffer);
-              if (!tagDetected && tag && toolCalls < maxToolCalls) {
-                tagDetected = tag;
-                continue;
-              }
+            const tag = detectSearchTag(scanBuffer);
+            if (!tagDetected && tag && toolCalls < maxToolCalls) {
+              tagDetected = tag;
+              continue;
             }
             const cleaned = sanitizeChunk(String(content));
             if (cleaned) {
@@ -767,7 +676,7 @@ export async function registerRoutes(
           let results = "";
           try {
             if (tagDetected.tool === "eco_search") {
-              results = await execEcoSearch(tagDetected.query, tavilyApiKey);
+              results = await execEcoSearch(tagDetected.query);
             } else if (tagDetected.tool === "high_precision_search") {
               results = await execHighPrecisionSearch(tagDetected.query);
             } else {
@@ -777,18 +686,18 @@ export async function registerRoutes(
             results = `(検索失敗: ${e?.message || "unknown"})`;
           }
           const continuationMessages = [
-            ...chatMessagesWithInjection,
+            ...chatMessages,
             { role: "assistant" as const, content: assistantAccum },
             {
               role: "user" as const,
-              content: `${buildInjectedContext(results)}\n\n先ほどの回答の続きを作成してください。`,
+              content: `以下の検索結果を参考に、先ほどの回答の続きを作成してください。\n\n${results}\n\n注意: タグや署名は含めないでください。`,
             },
           ];
           const contStream = anthropic.messages.stream({
             model,
             max_tokens: maxTokensParam,
             messages: continuationMessages,
-            system: systemInstruction || undefined,
+            system: systemInstructions ? String(systemInstructions) : undefined,
             temperature: tempParam,
             top_p: topPParam,
           });
