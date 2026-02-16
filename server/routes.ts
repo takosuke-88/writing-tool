@@ -427,6 +427,11 @@ export async function registerRoutes(
               };
             }
           }
+          // Strict Regex Cleaning (User Requested)
+          const strictCleaned = cleaned
+            .replace(/\n\n---[\s\S]*$|Model:.*$/gim, "")
+            .trim();
+          return { ...m, content: strictCleaned };
           return { ...m, content: cleaned };
         }
         return m;
