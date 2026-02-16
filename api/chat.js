@@ -780,6 +780,7 @@ export default async function handler(req, res) {
 2. standard_search: 一般的な情報検索に使用してください。
 3. eco_search: 単純な事実確認、天気、定義などの簡単な検索に使用してください（Tavily使用）。
    【重要】回答の冒頭に【eco_search: ...】のようなツール使用の宣言を絶対に入れないでください。省略してください。
+   【重要】検索の判断などはタグを出力するだけで、それ以外のメタデータ（署名など）は一切出力しないでください。
 
 ユーザーの質問の複雑さと重要度に応じて、最も適切でコスト対効果の高いツールを選択してください。`;
     } else if (searchMode === "high_precision") {
@@ -819,10 +820,10 @@ export default async function handler(req, res) {
    - 思考過程で使用する \`【eco_search: ...】\` などのタグやコマンドは、**最終出力には一切含めないでください**。
    - ユーザーに見せるのは「検索結果を踏まえた自然な回答テキスト」のみです。
 
-2. **【重要】署名フォーマットの重複防止**
-   - 回答の末尾に、署名や「Model: ...」を**AI自身が生成することは禁止**します。
-   - これらはシステムが自動的に正しいフォーマットで付与するため、AIが書くと重複してしまいます。
-   - **署名はシステムに任せ、回答本文のみを出力してください。**
+2. **【重要】署名の完全禁止**
+   - 「Search Model: ...」や「Model: ...」などの署名を**絶対に自分て書かないでください**。
+   - これらはシステムが強制的に付与するため、あなたが書くと重複します。
+   - **回答本文のみ**を出力してください。
 `;
 
     // Append formatting instructions at the very end to ensure they aren't overridden
@@ -1002,6 +1003,11 @@ export default async function handler(req, res) {
       }
 
       const finalMessage = await stream.finalMessage();
+      // Server-Side Footer Enforcement
+      const footer = createFooter(model, usedTools, ecoSearchQuery);
+      res.write(
+        `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+      );
       if (finalMessage.usage) {
         await logApiUsage(
           "claude",

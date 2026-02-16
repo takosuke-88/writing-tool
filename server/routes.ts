@@ -435,6 +435,21 @@ export async function registerRoutes(
         (m) => !m || typeof m.content !== "string" || m.content.trim() !== "",
       );
   };
+  const noMetadataInstruction = `
+# Role & Goal
+あなたは優秀なライティングアシスタントです。ユーザーの要望に合わせてテキストを生成します。
+
+# Critical Constraints (絶対遵守事項)
+
+1. **【重要】検索コマンドの完全隠蔽**
+   - 思考過程で使用する \`【eco_search: ...】\` などのタグやコマンドは、**最終出力には一切含めないでください**。
+   - ユーザーに見せるのは「検索結果を踏まえた自然な回答テキスト」のみです。
+
+2. **【重要】署名の完全禁止**
+   - 「Search Model: ...」や「Model: ...」などの署名を**絶対に自分て書かないでください**。
+   - これらはシステムが強制的に付与するため、あなたが書くと重複します。
+   - **回答本文のみ**を出力してください。
+`;
   const buildSystemInstruction = (
     base: unknown,
     searchMode?: string,
@@ -572,6 +587,112 @@ export async function registerRoutes(
         .slice(-1)[0];
       const forceSearch = searchMode && searchMode !== "auto";
       let injectedResults = "";
+      let searchInstructions = "";
+      const TOOLS = [
+        {
+          type: "function",
+          function: {
+            name: "high_precision_search",
+            description: "高精度な検索エンジンで情報を検索します。",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "検索クエリ",
+                },
+              },
+              required: ["query"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "standard_search",
+            description: "標準的な検索エンジンで情報を検索します。",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "検索クエリ",
+                },
+              },
+              required: ["query"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "eco_search",
+            description: "高速で軽量な検索エンジンで情報を検索します。",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "検索クエリ",
+                },
+              },
+              required: ["query"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "deep_analysis",
+            description:
+              "与えられたテキストを深く分析し、要約、キーワード抽出、感情分析などを行います。",
+            parameters: {
+              type: "object",
+              properties: {
+                text: {
+                  type: "string",
+                  description: "分析対象のテキスト",
+                },
+              },
+              required: ["text"],
+            },
+          },
+        },
+      ];
+      let effectiveTools = TOOLS;
+
+      if (searchMode === "auto") {
+        searchInstructions = `【検索ツールの使い分けについて】
+あなたは以下の3つの検索ツールを使用できます：
+1. high_precision_search: 複雑なトピック、最新ニュース、深い調査が必要な場合に使用してください（Perplexity使用）。
+2. standard_search: 一般的な情報検索に使用してください。
+3. eco_search: 単純な事実確認、天気、定義などの簡単な検索に使用してください（Tavily使用）。
+   【重要】回答の冒頭に【eco_search: ...】のようなツール使用の宣言を絶対に入れないでください。省略してください。
+   【重要】検索の判断などはタグを出力するだけで、それ以外のメタデータ（署名など）は一切出力しないでください。
+
+ユーザーの質問の複雑さと重要度に応じて、最も適切でコスト対効果の高いツールを選択してください。`;
+      } else if (searchMode === "high_precision") {
+        searchInstructions = `【検索について】必ず 'high_precision_search' を使用してください。`;
+        effectiveTools = TOOLS.filter(
+          (t: any) =>
+            t.function.name === "high_precision_search" ||
+            t.function.name === "deep_analysis",
+        );
+      } else if (searchMode === "standard") {
+        searchInstructions = `【検索について】必ず 'standard_search' を使用してください。`;
+        effectiveTools = TOOLS.filter(
+          (t: any) =>
+            t.function.name === "standard_search" ||
+            t.function.name === "deep_analysis",
+        );
+      } else if (searchMode === "eco") {
+        searchInstructions = `【検索について】必ず 'eco_search' を使用してください。`;
+        effectiveTools = TOOLS.filter(
+          (t: any) =>
+            t.function.name === "eco_search" ||
+            t.function.name === "deep_analysis",
+        );
+      }
       if (forceSearch && lastUser?.content) {
         try {
           if (searchMode === "eco") {
@@ -598,7 +719,6 @@ export async function registerRoutes(
         !!forceSearch,
       );
       res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
       res.write(
         `data: ${JSON.stringify({ type: "model_selected", model })}\n\n`,
@@ -955,10 +1075,13 @@ export async function registerRoutes(
             }
           }
         }
+        const finalMessage = await stream.finalMessage();
+
         const footer = createFooter(model, searchMode);
         res.write(
           `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
         );
+
         res.write("data: [DONE]\n\n");
         return res.end();
       }
