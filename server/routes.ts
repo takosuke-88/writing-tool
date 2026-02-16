@@ -413,6 +413,11 @@ export async function registerRoutes(
     return `${baseText}${modeText}`.trim();
   };
   const buildInjectedContext = (results: string) => `【検索結果】\n${results}`;
+  const buildSystemReminder = (base: unknown) => {
+    const text = base ? String(base).trim() : "";
+    if (!text) return "";
+    return `【システム指示（遵守）】\n${text}`;
+  };
   const detectSearchTag = (
     text: string,
   ): { tool: "eco_search" | "high_precision_search" | "standard_search"; query: string } | null => {
@@ -573,9 +578,14 @@ export async function registerRoutes(
           res.write("data: [DONE]\n\n");
           return res.end();
         }
-        const userText = injectedResults
-          ? `${buildInjectedContext(injectedResults)}\n\n${lastUser?.content || ""}`
-          : String(lastUser?.content || "");
+        const reminder = buildSystemReminder(systemInstruction);
+        const prefixBlocks = [
+          reminder ? `${reminder}` : "",
+          injectedResults ? `${buildInjectedContext(injectedResults)}` : "",
+        ].filter(Boolean);
+        const userText = [prefixBlocks.join("\n\n"), String(lastUser?.content || "")]
+          .filter((s) => s && s.trim() !== "")
+          .join("\n\n");
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const requestBody: any = {
           contents: [
@@ -706,6 +716,9 @@ export async function registerRoutes(
         const injectedMessage = injectedResults
           ? { role: "user" as const, content: buildInjectedContext(injectedResults) }
           : null;
+        const reminderMessage = systemInstruction
+          ? { role: "user" as const, content: buildSystemReminder(systemInstruction) }
+          : null;
         let lastUserIndex = -1;
         for (let i = chatMessages.length - 1; i >= 0; i--) {
           if (chatMessages[i].role === "user") {
@@ -714,10 +727,11 @@ export async function registerRoutes(
           }
         }
         const chatMessagesWithInjection =
-          injectedMessage && lastUserIndex >= 0
+          lastUserIndex >= 0
             ? [
                 ...chatMessages.slice(0, lastUserIndex),
-                injectedMessage,
+                ...(reminderMessage ? [reminderMessage] : []),
+                ...(injectedMessage ? [injectedMessage] : []),
                 chatMessages[lastUserIndex],
                 ...chatMessages.slice(lastUserIndex + 1),
               ]
