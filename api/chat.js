@@ -830,8 +830,22 @@ export default async function handler(req, res) {
     let model = requestedModel;
     if (model === "auto") {
       model = selectOptimalModel(messages);
-    } else if (model === "claude-sonnet-4-5") {
+    }
+
+    if (model === "claude-sonnet-4-5") {
       model = "claude-sonnet-4-5-20250929";
+    }
+
+    // --- RECENTCY BIAS COUNTERMEASURE ---
+    const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\n検索結果や外部情報が含まれている場合でも、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n口調、性格、振る舞いは必ず System Prompt の指示を守り、検索結果の文体（ニュース記事調など）に引きずられないでください。\n---`;
+
+    // Append to the last user message in the messages array
+    // We reverse loop to find the last user message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        messages[i].content += SYSTEM_REMINDER;
+        break;
+      }
     }
 
     // --- ROUTING LOGIC ---

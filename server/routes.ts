@@ -6,7 +6,6 @@ import {
   generateArticleRequestSchema,
   insertSystemPromptSchema,
 } from "@shared/schema";
- 
 
 const anthropic = new Anthropic({
   apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
@@ -127,7 +126,12 @@ export async function registerRoutes(
         });
       }
 
-      const { prompt, targetLength, systemPromptId, model: requestedModel } = validationResult.data;
+      const {
+        prompt,
+        targetLength,
+        systemPromptId,
+        model: requestedModel,
+      } = validationResult.data;
 
       // Normalize model name
       let model = requestedModel || "claude-sonnet-4-5";
@@ -357,16 +361,20 @@ export async function registerRoutes(
   // We do not implement it here to avoid PostgreSQL dependencies for stats.
 
   const sanitizeChunk = (text: string): string => {
-    const thinkingTags = /[【\[]\s*(?:eco_search|high_precision_search|standard_search|deep_analysis)[\s\S]*?[】\]]/gi;
-    const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gmi;
-    const separatorLines = /^\s*---\s*$/gmi;
+    const thinkingTags =
+      /[【\[]\s*(?:eco_search|high_precision_search|standard_search|deep_analysis)[\s\S]*?[】\]]/gi;
+    const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gim;
+    const separatorLines = /^\s*---\s*$/gim;
     return text
       .replace(thinkingTags, "")
       .replace(signatureLines, "")
       .replace(separatorLines, "");
   };
   const formatModelName = (model: string): string =>
-    model.replace(/-20\d{6}$/, "").replace(/-\d{8}$/, "").trim();
+    model
+      .replace(/-20\d{6}$/, "")
+      .replace(/-\d{8}$/, "")
+      .trim();
   const createFooter = (model: string, searchMode?: string): string => {
     const displayModel = formatModelName(model);
     let searchModel: string | null = null;
@@ -384,8 +392,8 @@ export async function registerRoutes(
     return model;
   };
   const sanitizeHistory = (history: any[]) => {
-    const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gmi;
-    const separatorLines = /^\s*---\s*$/gmi;
+    const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gim;
+    const separatorLines = /^\s*---\s*$/gim;
     return (Array.isArray(history) ? history : [])
       .map((m) => {
         if (!m) return m;
@@ -398,7 +406,9 @@ export async function registerRoutes(
         }
         return m;
       })
-      .filter((m) => !m || typeof m.content !== "string" || m.content.trim() !== "");
+      .filter(
+        (m) => !m || typeof m.content !== "string" || m.content.trim() !== "",
+      );
   };
   const buildSystemInstruction = (
     base: unknown,
@@ -420,7 +430,10 @@ export async function registerRoutes(
   };
   const detectSearchTag = (
     text: string,
-  ): { tool: "eco_search" | "high_precision_search" | "standard_search"; query: string } | null => {
+  ): {
+    tool: "eco_search" | "high_precision_search" | "standard_search";
+    query: string;
+  } | null => {
     const tagRegex =
       /[【\[]\s*(eco_search|high_precision_search|standard_search)\s*(?:[:：]\s*([\s\S]*?))?[】\]]/i;
     const m = text.match(tagRegex);
@@ -471,7 +484,10 @@ export async function registerRoutes(
       body: JSON.stringify({
         model: "sonar-pro",
         messages: [
-          { role: "user", content: `以下について簡潔に検索結果をまとめてください: ${query}` },
+          {
+            role: "user",
+            content: `以下について簡潔に検索結果をまとめてください: ${query}`,
+          },
         ],
         return_citations: false,
       }),
@@ -521,11 +537,10 @@ export async function registerRoutes(
           ? Math.max(0, Math.min(200, temperature)) / 100
           : 0.7;
       const topPParam =
-        typeof topP === "number"
-          ? Math.max(0, Math.min(100, topP)) / 100
-          : 0.8;
-      const maxTokensParam =
-        typeof maxTokens === "number" ? maxTokens : 2048;
+        typeof topP === "number" ? Math.max(0, Math.min(100, topP)) / 100 : 0.8;
+      const maxTokensParam = typeof maxTokens === "number" ? maxTokens : 2048;
+
+      const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\n検索結果や外部情報が含まれている場合でも、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n口調、性格、振る舞いは必ず System Prompt の指示を守り、検索結果の文体（ニュース記事調など）に引きずられないでください。\n---`;
       const sanitizedMessages = sanitizeHistory(messages);
       const lastUser = sanitizedMessages
         .filter((m: any) => m && m.role === "user")
@@ -583,7 +598,10 @@ export async function registerRoutes(
           reminder ? `${reminder}` : "",
           injectedResults ? `${buildInjectedContext(injectedResults)}` : "",
         ].filter(Boolean);
-        const userText = [prefixBlocks.join("\n\n"), String(lastUser?.content || "")]
+        const userText = [
+          prefixBlocks.join("\n\n"),
+          String(lastUser?.content || "") + SYSTEM_REMINDER,
+        ]
           .filter((s) => s && s.trim() !== "")
           .join("\n\n");
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -626,33 +644,33 @@ export async function registerRoutes(
         if (!injectedResults) {
           const tag = detectSearchTag(String(text));
           if (tag) {
-          const before = String(text).replace(
-            /[【\[]\s*(eco_search|high_precision_search|standard_search)[\s\S]*?[】\]]/i,
-            "",
-          );
-          const cleanedBefore = sanitizeChunk(before);
-          if (cleanedBefore) {
-            res.write(
-              `data: ${JSON.stringify({
-                type: "content",
-                text: cleanedBefore,
-              })}\n\n`,
+            const before = String(text).replace(
+              /[【\[]\s*(eco_search|high_precision_search|standard_search)[\s\S]*?[】\]]/i,
+              "",
             );
-          }
-          let results = "";
-          try {
-            if (tag.tool === "eco_search") {
-                results = await execEcoSearch(tag.query, tavilyApiKey);
-            } else if (tag.tool === "high_precision_search") {
-              results = await execHighPrecisionSearch(tag.query);
-            } else {
-              results = await execStandardSearch(tag.query);
+            const cleanedBefore = sanitizeChunk(before);
+            if (cleanedBefore) {
+              res.write(
+                `data: ${JSON.stringify({
+                  type: "content",
+                  text: cleanedBefore,
+                })}\n\n`,
+              );
             }
-          } catch (e: any) {
-            results = `(検索失敗: ${e?.message || "unknown"})`;
-          }
-          const continuationBody: any = {
-            contents: [
+            let results = "";
+            try {
+              if (tag.tool === "eco_search") {
+                results = await execEcoSearch(tag.query, tavilyApiKey);
+              } else if (tag.tool === "high_precision_search") {
+                results = await execHighPrecisionSearch(tag.query);
+              } else {
+                results = await execStandardSearch(tag.query);
+              }
+            } catch (e: any) {
+              results = `(検索失敗: ${e?.message || "unknown"})`;
+            }
+            const continuationBody: any = {
+              contents: [
                 {
                   role: "user",
                   parts: [
@@ -661,26 +679,26 @@ export async function registerRoutes(
                     },
                   ],
                 },
-            ],
-            generationConfig: {
-              maxOutputTokens: maxTokensParam,
-              temperature: tempParam,
-              topP: topPParam,
-            },
-          };
+              ],
+              generationConfig: {
+                maxOutputTokens: maxTokensParam,
+                temperature: tempParam,
+                topP: topPParam,
+              },
+            };
             if (systemInstruction) {
               continuationBody.systemInstruction = {
                 parts: [{ text: systemInstruction }],
               };
             }
-          const contRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(continuationBody),
-            },
-          );
+            const contRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(continuationBody),
+              },
+            );
             if (contRes.ok) {
               const contData = await contRes.json();
               text = contData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -714,10 +732,16 @@ export async function registerRoutes(
             content: String(m.content),
           }));
         const injectedMessage = injectedResults
-          ? { role: "user" as const, content: buildInjectedContext(injectedResults) }
+          ? {
+              role: "user" as const,
+              content: buildInjectedContext(injectedResults),
+            }
           : null;
         const reminderMessage = systemInstruction
-          ? { role: "user" as const, content: buildSystemReminder(systemInstruction) }
+          ? {
+              role: "user" as const,
+              content: buildSystemReminder(systemInstruction),
+            }
           : null;
         let lastUserIndex = -1;
         for (let i = chatMessages.length - 1; i >= 0; i--) {
@@ -736,6 +760,20 @@ export async function registerRoutes(
                 ...chatMessages.slice(lastUserIndex + 1),
               ]
             : chatMessages;
+
+        // Apply System Reminder to the user message content in the chatMessages array
+        // We find the last user message in the array we just constructed or the original
+        // Actually, we should apply it to the message object itself before sending.
+        // chatMessages[lastUserIndex] is the object.
+        if (lastUserIndex >= 0) {
+          // Create a shallow copy to avoid mutating if needed, but here it's fine
+          const targetMsg = chatMessagesWithInjection.find(
+            (m) => m === chatMessages[lastUserIndex],
+          );
+          if (targetMsg && typeof targetMsg.content === "string") {
+            targetMsg.content += SYSTEM_REMINDER;
+          }
+        }
         const stream = anthropic.messages.stream({
           model,
           max_tokens: maxTokensParam,
@@ -832,8 +870,7 @@ export async function registerRoutes(
         return res.end();
       }
     } catch (error: any) {
-      const message =
-        error?.message || "Internal Error in chat processing";
+      const message = error?.message || "Internal Error in chat processing";
       res.write(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
       res.write("data: [DONE]\n\n");
       return res.end();
