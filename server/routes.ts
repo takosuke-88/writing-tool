@@ -375,12 +375,23 @@ export async function registerRoutes(
       .replace(/-20\d{6}$/, "")
       .replace(/-\d{8}$/, "")
       .trim();
-  const createFooter = (model: string, searchMode?: string): string => {
+  const createFooter = (
+    model: string,
+    searchMode?: string,
+    detectedTool?: string,
+  ): string => {
     const displayModel = formatModelName(model);
     let searchModel: string | null = null;
-    if (searchMode === "high_precision") searchModel = "perplexity";
-    else if (searchMode === "eco") searchModel = "eco_search";
-    else if (searchMode === "standard") searchModel = "standard_search";
+    if (
+      searchMode === "high_precision" ||
+      detectedTool === "high_precision_search"
+    )
+      searchModel = "perplexity";
+    else if (searchMode === "eco" || detectedTool === "eco_search")
+      searchModel = "eco_search";
+    else if (searchMode === "standard" || detectedTool === "standard_search")
+      searchModel = "standard_search";
+
     let footer = `\n\n---\n`;
     if (searchModel) footer += `Search Model: ${searchModel}\n\n`;
     footer += `Model: ${displayModel}`;
@@ -402,6 +413,20 @@ export async function registerRoutes(
             .replace(signatureLines, "")
             .replace(separatorLines, "")
             .trim();
+
+          // Semantic cleanup: Remove footer block if it exists
+          // Looks for the separator and subsequent metadata
+          const splitParts = cleaned.split(/---\s*$/);
+          if (splitParts.length > 1) {
+            // Check if the last part looks like metadata
+            const potentialFooter = splitParts[splitParts.length - 1];
+            if (potentialFooter.match(/(Search Model|Model)\s*[:：]/i)) {
+              return {
+                ...m,
+                content: splitParts.slice(0, -1).join("---").trim(),
+              };
+            }
+          }
           return { ...m, content: cleaned };
         }
         return m;
@@ -540,7 +565,7 @@ export async function registerRoutes(
         typeof topP === "number" ? Math.max(0, Math.min(100, topP)) / 100 : 0.8;
       const maxTokensParam = typeof maxTokens === "number" ? maxTokens : 2048;
 
-      const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\n検索結果や外部情報が含まれている場合でも、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n口調、性格、振る舞いは必ず System Prompt の指示を守り、検索結果の文体（ニュース記事調など）に引きずられないでください。\n---`;
+      const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\n検索結果や外部情報が含まれている場合でも、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n口調、性格、振る舞いは必ず System Prompt の指示を守り、検索結果の文体（ニュース記事調など）に引きずられないでください。\n\n【禁止事項】\n・ユーザーの質問を復唱しない。\n・「〜を聞いてくれてありがとう」等の感謝の挨拶は禁止。いきなり本題の回答から始める。\n---`;
       const sanitizedMessages = sanitizeHistory(messages);
       const lastUser = sanitizedMessages
         .filter((m: any) => m && m.role === "user")
@@ -788,32 +813,100 @@ export async function registerRoutes(
         const maxToolCalls = 3;
         let tagDetected: ReturnType<typeof detectSearchTag> | null = null;
         const allowTagDetection = !injectedResults;
+
+        // Output buffering state
+        let isBufferingOutput = false;
+        let outputBuffer = "";
+
         for await (const event of stream) {
           if (
             event.type === "content_block_delta" &&
             (event as any).delta?.type === "text_delta"
           ) {
             const content = (event as any).delta?.text || "";
-            scanBuffer = (scanBuffer + content).slice(-4000);
+            scanBuffer = (scanBuffer + content).slice(-4000); // Keep larger context for tag detection
+
             if (allowTagDetection) {
               const tag = detectSearchTag(scanBuffer);
               if (!tagDetected && tag && toolCalls < maxToolCalls) {
                 tagDetected = tag;
-                continue;
+                // Once detected, we do NOT continue here, so that we can strip the tag from output
+                // But we need to make sure we don't output the tag itself.
+                // Since detectSearchTag finds it in scanBuffer, it might have been partially outputted if we weren't buffering.
+                // WE NEED TO BUFFER output when we see a potential open bracket.
               }
             }
-            const cleaned = sanitizeChunk(String(content));
-            if (cleaned) {
-              assistantAccum += cleaned;
-              res.write(
-                `data: ${JSON.stringify({
-                  type: "content",
-                  text: cleaned,
-                })}\n\n`,
-              );
+
+            // Simple Buffering Logic for Tag Suppression
+            // If we encounter an open bracket, we start buffering until we either match a tag (then discard) or confirm it's not a tag (then flush).
+            // Simplified: If 'content' contains part of a tag, don't write it.
+            // But 'content' is small.
+            // Let's use a simpler heuristic: If we are not buffering, and we see '【' or '[', start buffering.
+            // If buffering, append to buffer.
+            // If buffer matches a full tag, clear buffer (swallow it).
+            // If buffer gets too long or doesn't look like a tag anymore, flush it.
+
+            for (const char of content) {
+              if (!isBufferingOutput) {
+                if (char === "【" || char === "[") {
+                  isBufferingOutput = true;
+                  outputBuffer = char;
+                } else {
+                  // Pass through sanitization
+                  const cleaned = sanitizeChunk(char);
+                  if (cleaned) {
+                    assistantAccum += cleaned;
+                    res.write(
+                      `data: ${JSON.stringify({ type: "content", text: cleaned })}\n\n`,
+                    );
+                  }
+                }
+              } else {
+                outputBuffer += char;
+                // Check if valid tag prefix
+                if (
+                  outputBuffer.length > 50 &&
+                  !/^[【\[]\s*(eco|high|standard|deep)/i.test(outputBuffer)
+                ) {
+                  // Probably not a tag, flush
+                  res.write(
+                    `data: ${JSON.stringify({ type: "content", text: outputBuffer })}\n\n`,
+                  );
+                  assistantAccum += outputBuffer;
+                  isBufferingOutput = false;
+                  outputBuffer = "";
+                } else if (/[】\]]/.test(char)) {
+                  // Closing bracket found. Check if it is a tag.
+                  if (detectSearchTag(outputBuffer)) {
+                    // It IS a tag. Censor it.
+                    // detectedSearchTag will catch it in the outer scope logic eventually or we already set tagDetected
+                    // We do NOT write it to res.
+                    // Just clear buffer.
+                    isBufferingOutput = false;
+                    outputBuffer = "";
+                  } else {
+                    // Just a bracketed string, flush
+                    res.write(
+                      `data: ${JSON.stringify({ type: "content", text: outputBuffer })}\n\n`,
+                    );
+                    assistantAccum += outputBuffer;
+                    isBufferingOutput = false;
+                    outputBuffer = "";
+                  }
+                }
+              }
             }
           }
         }
+
+        // Flush remaining buffer
+        if (isBufferingOutput && outputBuffer) {
+          res.write(
+            `data: ${JSON.stringify({ type: "content", text: outputBuffer })}\n\n`,
+          );
+          assistantAccum += outputBuffer;
+        }
+
         if (tagDetected && toolCalls < maxToolCalls) {
           toolCalls++;
           let results = "";
