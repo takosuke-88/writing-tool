@@ -448,11 +448,6 @@ function normalizeMessages(messages, systemInstructions) {
           return { ...m, content: splitParts.slice(0, -1).join("---").trim() };
         }
       }
-      // Strict Regex Cleaning (User Requested)
-      const strictCleaned = contentStr
-        .replace(/\n\n---[\s\S]*$|Model:.*$/gim, "")
-        .trim();
-      return { ...m, content: strictCleaned };
       // Fallback regex cleaning
       let content = contentStr
         .replace(/^\s*(Search Model|Model)\s*[:：].*$/gim, "")
