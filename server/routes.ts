@@ -115,6 +115,29 @@ export async function registerRoutes(
 ): Promise<Server> {
   await initializeDefaultTemplates();
 
+  const DEFAULT_MODEL =
+    process.env.DEFAULT_MODEL || "claude-sonnet-4-5-20250929";
+  const HAIKU_MODEL = process.env.HAIKU_MODEL || "claude-haiku-4-5-20251001";
+
+  // Simple query detection for auto model routing
+  const isSimpleQuery = (text: string): boolean => {
+    const trimmed = text.trim();
+    // Short messages (under 30 chars) are likely simple
+    if (trimmed.length < 30) return true;
+    // Greeting patterns
+    const greetings =
+      /^(こんにちは|こんばんは|おはよう|やあ|ども|hi|hello|hey|おつかれ|ありがとう|さようなら|bye|お疲れ|よろしく|はじめまして|元気|調子|テスト)/i;
+    if (greetings.test(trimmed)) return true;
+    return false;
+  };
+
+  const normalizeModel = (requested?: string): string => {
+    if (!requested || requested === "auto") {
+      return DEFAULT_MODEL; // will be overridden per-query in /api/chat
+    }
+    return requested;
+  };
+
   app.post("/api/generate-article", async (req, res) => {
     try {
       const validationResult = generateArticleRequestSchema.safeParse(req.body);
@@ -134,10 +157,7 @@ export async function registerRoutes(
       } = validationResult.data;
 
       // Normalize model name
-      let model = requestedModel || "claude-sonnet-4-5";
-      if (model === "claude-sonnet-4-5") {
-        model = "claude-sonnet-4-5-20250929";
-      }
+      const model = normalizeModel(requestedModel);
 
       let systemPromptText = `あなたはSEOに精通した、人間味あふれるベテランWEBライターです。
 ユーザーの入力（お題または下書き）をもとに、必ず${targetLength}文字以内の記事を作成してください。
@@ -397,11 +417,7 @@ export async function registerRoutes(
     footer += `Model: ${displayModel}`;
     return footer;
   };
-  const normalizeModel = (requested?: string): string => {
-    let model = requested || "claude-sonnet-4-5";
-    if (model === "claude-sonnet-4-5") model = "claude-sonnet-4-5-20250929";
-    return model;
-  };
+
   const sanitizeHistory = (history: any[]) => {
     const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gim;
     const separatorLines = /^\s*---\s*$/gim;
@@ -571,13 +587,22 @@ export async function registerRoutes(
         searchMode,
         tavilyApiKey,
       } = req.body || {};
-      const model = normalizeModel(requestedModel);
+
+      // Resolve model: if "auto", pick Haiku or Sonnet based on query complexity
+      const isAutoModel = !requestedModel || requestedModel === "auto";
+      const lastUserContent = Array.isArray(messages)
+        ? messages.filter((m: any) => m?.role === "user").slice(-1)[0]
+            ?.content || ""
+        : "";
+      const model = isAutoModel
+        ? isSimpleQuery(String(lastUserContent))
+          ? HAIKU_MODEL
+          : DEFAULT_MODEL
+        : normalizeModel(requestedModel);
       const tempParam =
         typeof temperature === "number"
-          ? Math.max(0, Math.min(200, temperature)) / 100
+          ? Math.max(0, Math.min(100, temperature)) / 100
           : 0.7;
-      const topPParam =
-        typeof topP === "number" ? Math.max(0, Math.min(100, topP)) / 100 : 0.8;
       const maxTokensParam = typeof maxTokens === "number" ? maxTokens : 2048;
 
       const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\n検索結果や外部情報が含まれている場合でも、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n口調、性格、振る舞いは必ず System Prompt の指示を守り、検索結果の文体（ニュース記事調など）に引きずられないでください。\n\n【禁止事項】\n・ユーザーの質問を復唱しない。\n・「〜を聞いてくれてありがとう」等の感謝の挨拶は禁止。いきなり本題の回答から始める。\n---`;
@@ -585,9 +610,74 @@ export async function registerRoutes(
       const lastUser = sanitizedMessages
         .filter((m: any) => m && m.role === "user")
         .slice(-1)[0];
+      // Server-side detection: does this query need real-time search?
+      const needsRealtimeSearch = (text: string): boolean => {
+        const t = text.toLowerCase();
+        // Weather, news, current events, real-time info
+        const patterns = [
+          /天気/,
+          /気温/,
+          /降水/,
+          /weather/,
+          /ニュース/,
+          /news/,
+          /最新/,
+          /速報/,
+          /今日/,
+          /昨日/,
+          /明日/,
+          /今週/,
+          /先週/,
+          /今月/,
+          /today/,
+          /yesterday/,
+          /tomorrow/,
+          /株価/,
+          /為替/,
+          /レート/,
+          /price/,
+          /現在/,
+          /リアルタイム/,
+          /最近の/,
+          /何時/,
+          /いつ/,
+          /スコア/,
+          /試合結果/,
+          /イベント/,
+          /開催/,
+          /営業時間/,
+          /地震/,
+          /災害/,
+          /交通/,
+          /運行/,
+        ];
+        return patterns.some((p) => p.test(t));
+      };
+
       const forceSearch = searchMode && searchMode !== "auto";
       let injectedResults = "";
       let searchInstructions = "";
+
+      // Auto mode: proactively search if query needs real-time info
+      if (
+        searchMode === "auto" &&
+        lastUser?.content &&
+        needsRealtimeSearch(String(lastUser.content))
+      ) {
+        try {
+          injectedResults = await execEcoSearch(
+            String(lastUser.content),
+            tavilyApiKey,
+          );
+          console.log(
+            "[AutoSearch] Triggered eco search for:",
+            String(lastUser.content).slice(0, 50),
+          );
+        } catch (e: any) {
+          console.error("[AutoSearch] Failed:", e?.message);
+          injectedResults = `(検索失敗: ${e?.message || "unknown"})`;
+        }
+      }
       const TOOLS = [
         {
           type: "function",
@@ -719,7 +809,9 @@ export async function registerRoutes(
         !!forceSearch,
       );
       res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
       res.write(
         `data: ${JSON.stringify({ type: "model_selected", model })}\n\n`,
       );
@@ -760,7 +852,6 @@ export async function registerRoutes(
           generationConfig: {
             maxOutputTokens: maxTokensParam,
             temperature: tempParam,
-            topP: topPParam,
           },
         };
         if (systemInstruction) {
@@ -828,7 +919,6 @@ export async function registerRoutes(
               generationConfig: {
                 maxOutputTokens: maxTokensParam,
                 temperature: tempParam,
-                topP: topPParam,
               },
             };
             if (systemInstruction) {
@@ -925,7 +1015,6 @@ export async function registerRoutes(
           messages: chatMessagesWithInjection,
           system: systemInstruction || undefined,
           temperature: tempParam,
-          top_p: topPParam,
         });
         let assistantAccum = "";
         let scanBuffer = "";
@@ -1055,7 +1144,6 @@ export async function registerRoutes(
             messages: continuationMessages,
             system: systemInstruction || undefined,
             temperature: tempParam,
-            top_p: topPParam,
           });
           for await (const event of contStream) {
             if (
@@ -1075,7 +1163,6 @@ export async function registerRoutes(
             }
           }
         }
-        const finalMessage = await stream.finalMessage();
 
         const footer = createFooter(model, searchMode);
         res.write(
@@ -1087,8 +1174,17 @@ export async function registerRoutes(
       }
     } catch (error: any) {
       const message = error?.message || "Internal Error in chat processing";
-      res.write(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
-      res.write("data: [DONE]\n\n");
+      try {
+        if (!res.headersSent) {
+          res.setHeader("Content-Type", "text/event-stream");
+          res.setHeader("Cache-Control", "no-cache");
+          res.setHeader("Connection", "keep-alive");
+        }
+        res.write(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
+        res.write("data: [DONE]\n\n");
+      } catch (_writeErr) {
+        console.error("Failed to write error to SSE stream:", _writeErr);
+      }
       return res.end();
     }
   });

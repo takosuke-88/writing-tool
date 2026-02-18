@@ -36,18 +36,30 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Try /api/usage first, fallback to /api/stats
-    fetch("/api/usage")
-      .catch(() => fetch("/api/stats"))
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchStats = async () => {
+      try {
+        // Try /api/usage first
+        let res = await fetch("/api/usage");
+
+        // If /api/usage fails (404 etc), try /api/stats
+        if (!res.ok) {
+          res = await fetch("/api/stats");
+        }
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch stats from both endpoints");
+        }
+
+        const data = await res.json();
         setStats(data);
-        setLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Failed to fetch stats:", err);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchStats();
   }, []);
 
   if (loading) return <div className="p-8">読み込み中...</div>;
@@ -82,23 +94,45 @@ export default function Dashboard() {
       </div>
 
       {/* Monthly Budget Progress */}
-      <Card className={isDanger ? "border-red-500 border-2" : isWarning ? "border-yellow-500 border-2" : ""}>
+      <Card
+        className={
+          isDanger
+            ? "border-red-500 border-2"
+            : isWarning
+              ? "border-yellow-500 border-2"
+              : ""
+        }
+      >
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>今月の予算進捗</span>
-            {isDanger && <span className="text-red-500 text-sm font-normal">⚠️ 予算超過</span>}
-            {isWarning && !isDanger && <span className="text-yellow-600 text-sm font-normal">⚠️ 予算警告</span>}
+            {isDanger && (
+              <span className="text-red-500 text-sm font-normal">
+                ⚠️ 予算超過
+              </span>
+            )}
+            {isWarning && !isDanger && (
+              <span className="text-yellow-600 text-sm font-normal">
+                ⚠️ 予算警告
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex justify-between items-baseline">
               <div>
-                <div className="text-4xl font-bold">{formatCurrency(stats.thisMonth.cost)}</div>
-                <div className="text-sm text-gray-500">目標: ${MONTHLY_BUDGET.toFixed(2)}以内</div>
+                <div className="text-4xl font-bold">
+                  {formatCurrency(stats.thisMonth.cost)}
+                </div>
+                <div className="text-sm text-gray-500">
+                  目標: ${MONTHLY_BUDGET.toFixed(2)}以内
+                </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-semibold">{monthlyProgress.toFixed(0)}%</div>
+                <div className="text-2xl font-semibold">
+                  {monthlyProgress.toFixed(0)}%
+                </div>
                 <div className="text-xs text-gray-500">予算使用率</div>
               </div>
             </div>
@@ -109,7 +143,8 @@ export default function Dashboard() {
                 className={`h-full ${getProgressColor()} transition-all duration-300 flex items-center justify-center text-white text-xs font-semibold`}
                 style={{ width: `${Math.min(monthlyProgress, 100)}%` }}
               >
-                {monthlyProgress > 10 && `${formatCurrency(stats.thisMonth.cost)} / $${MONTHLY_BUDGET}`}
+                {monthlyProgress > 10 &&
+                  `${formatCurrency(stats.thisMonth.cost)} / $${MONTHLY_BUDGET}`}
               </div>
             </div>
 
@@ -120,7 +155,8 @@ export default function Dashboard() {
             )}
             {isWarning && !isDanger && (
               <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
-                ⚡ 予算の80%に達しました。残り${(MONTHLY_BUDGET - stats.thisMonth.cost).toFixed(2)}です。
+                ⚡ 予算の80%に達しました。残り$
+                {(MONTHLY_BUDGET - stats.thisMonth.cost).toFixed(2)}です。
               </div>
             )}
           </div>

@@ -35,26 +35,21 @@ interface ChatSettingsPanelProps {
 }
 
 const MODELS = [
-  { id: "auto", name: "Auto (最適モデル自動選択)", available: true }, // NEW
+  { id: "auto", name: "Auto (最適モデル自動選択)", available: true },
   {
     id: "claude-sonnet-4-5",
-    name: "Claude 4.5 Sonnet",
+    name: "Claude 4.6 Sonnet",
     available: true,
   },
   {
     id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash (Stable)",
+    name: "Gemini 2.5 Flash (安定版)",
     available: true,
   },
   {
     id: "gemini-3-flash-preview",
-    name: "Gemini 3 Flash Preview",
+    name: "Gemini 3 Flash (最新)",
     available: true,
-  },
-  {
-    id: "gemini-3-pro-preview",
-    name: "Gemini 3 Pro Preview",
-    available: false,
   },
   {
     id: "sonar-pro",

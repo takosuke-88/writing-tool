@@ -25,7 +25,10 @@ if (fs.existsSync(envPath)) {
     const eqIdx = trimmed.indexOf("=");
     if (eqIdx > 0) {
       const key = trimmed.slice(0, eqIdx).trim();
-      let val = trimmed.slice(eqIdx + 1).trim();
+      let val = trimmed
+        .slice(eqIdx + 1)
+        .trim()
+        .replace(/\r$/, "");
 
       // Remove wrapping quotes if present
       if (
