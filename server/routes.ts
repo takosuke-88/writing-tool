@@ -963,7 +963,7 @@ export async function registerRoutes(
         }
         const footer = createFooter(model, searchMode);
         res.write(
-          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+          `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
         );
         res.write("data: [DONE]\n\n");
         return res.end();
@@ -1042,7 +1042,7 @@ export async function registerRoutes(
         }
         const footer = createFooter(model, searchMode);
         res.write(
-          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+          `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
         );
         res.write("data: [DONE]\n\n");
         return res.end();
@@ -1262,7 +1262,7 @@ export async function registerRoutes(
 
         const footer = createFooter(model, searchMode);
         res.write(
-          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+          `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
         );
 
         res.write("data: [DONE]\n\n");

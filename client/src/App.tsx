@@ -247,11 +247,18 @@ function ChatApp() {
     try {
       const history = messages[selectedConversationId] || [];
       // Filter out messages with empty content to prevent 400 errors from previous failed generations
+      // Also strip footer/signature patterns from message history to prevent AI echo loop
+      const stripFooter = (text: string) => {
+        return text
+          .replace(/\n\n---\n(Search Model:[^\n]*\n\n?)?(Model:[^\n]*)?$/, "")
+          .replace(/\n\n---\s*$/, "")
+          .trim();
+      };
       const apiMessages = [...history, userMessage]
         .filter((m) => m.content && m.content.trim() !== "")
         .map((m) => ({
           role: m.role,
-          content: m.content,
+          content: m.role === "assistant" ? stripFooter(m.content) : m.content,
         }));
 
       const response = await fetch("/api/chat", {
@@ -295,6 +302,19 @@ function ChatApp() {
                 if (data.type === "content") {
                   fullText += data.text;
                   // Update UI
+                  setMessages((prev) => {
+                    const msgs = prev[selectedConversationId] || [];
+                    return {
+                      ...prev,
+                      [selectedConversationId]: msgs.map((m) =>
+                        m.id === aiMessageId ? { ...m, content: fullText } : m,
+                      ),
+                    };
+                  });
+                } else if (data.type === "footer") {
+                  // Footer is displayed but stored separately from the main content
+                  // so it doesn't get sent back as history to the AI
+                  fullText += data.text;
                   setMessages((prev) => {
                     const msgs = prev[selectedConversationId] || [];
                     return {

@@ -507,7 +507,7 @@ async function streamPerplexity(
     // Append Footer
     // Debug Info Removed
     const footer = createFooter(model, ["Perplexity (Native)"]);
-    res.write(`data: ${JSON.stringify({ type: "content", text: footer })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`);
 
     res.write("data: [DONE]\n\n");
     res.end();
@@ -706,7 +706,7 @@ async function streamGemini(
     // );
 
     const footer = createFooter(model, []);
-    res.write(`data: ${JSON.stringify({ type: "content", text: footer })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`);
 
     res.write("data: [DONE]\n\n");
     console.log("[DEBUG Gemini] Stream ended successfully");
@@ -1129,11 +1129,11 @@ export default async function handler(req, res) {
         conversationMessages.push({ role: "user", content: toolResults });
       } else {
         isFinalResponse = true;
-        // Append Footer
+        // Append Footer (as separate event type so client doesn't store in message history)
         const footer = createFooter(model, usedTools, ecoSearchQuery);
 
         res.write(
-          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+          `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
         );
       }
     }
