@@ -965,25 +965,27 @@ export default async function handler(req, res) {
 
           // Re-implementing specific cleanup for this chunk
           let textToWrite = chunk;
+          // Strip search tags
           if (
             /[【\[]/.test(textToWrite) ||
             /[】\]]/.test(textToWrite) ||
             /eco_search|high_precision|standard_search/.test(textToWrite)
           ) {
-            // Aggressive removal attempt for typical tag tokens
             textToWrite = textToWrite.replace(
               /[【\[]\s*(eco_search|high_precision_search|standard_search|deep_analysis).*?[】\]]/g,
               "",
             );
-            // If we have a dangling start?
             if (/[【\[]\s*$/.test(textToWrite))
               textToWrite = textToWrite.replace(/[【\[]\s*$/, "");
-            // If we have a dangling end?
             if (/^[】\]]/.test(textToWrite))
               textToWrite = textToWrite.replace(/^[】\]]/, "");
           }
+          // Strip AI-generated signatures/metadata (Model: ..., Search Model: ...)
+          textToWrite = textToWrite
+            .replace(/^\s*(Search Model|Model)\s*[:：].*$/gim, "")
+            .replace(/^\s*---\s*$/gim, "");
 
-          if (textToWrite) {
+          if (textToWrite && textToWrite.trim()) {
             res.write(
               `data: ${JSON.stringify({ type: "content", text: textToWrite })}\n\n`,
             );
@@ -1011,11 +1013,7 @@ export default async function handler(req, res) {
       }
 
       const finalMessage = await stream.finalMessage();
-      // Server-Side Footer Enforcement
-      const footer = createFooter(model, usedTools, ecoSearchQuery);
-      res.write(
-        `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
-      );
+      // Footer is written ONLY once, in the else block below when isFinalResponse = true.
       if (finalMessage.usage) {
         await logApiUsage(
           "claude",

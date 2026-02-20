@@ -385,10 +385,17 @@ export async function registerRoutes(
       /[【\[]\s*(?:eco_search|high_precision_search|standard_search|deep_analysis)[\s\S]*?[】\]]/gi;
     const signatureLines = /^\s*(Search Model|Model)\s*[:：].*$/gim;
     const separatorLines = /^\s*---\s*$/gim;
+    // Also catch lines like "Model: claude-sonnet-4-5" anywhere
+    const modelMention = /\bModel\s*[:：]\s*\S+/gi;
+    const searchModelMention = /\bSearch Model\s*[:：]\s*\S+/gi;
     return text
       .replace(thinkingTags, "")
       .replace(signatureLines, "")
-      .replace(separatorLines, "");
+      .replace(separatorLines, "")
+      .replace(modelMention, "")
+      .replace(searchModelMention, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   };
   const formatModelName = (model: string): string =>
     model
@@ -1140,7 +1147,11 @@ export async function registerRoutes(
             // If buffer matches a full tag, clear buffer (swallow it).
             // If buffer gets too long or doesn't look like a tag anymore, flush it.
 
-            for (const char of content) {
+            // Also strip AI-generated signatures from the content before char-by-char processing
+            const sigStripped = content
+              .replace(/^\s*(Search Model|Model)\s*[:：].*$/gim, "")
+              .replace(/^\s*---\s*$/gim, "");
+            for (const char of sigStripped) {
               if (!isBufferingOutput) {
                 if (char === "【" || char === "[") {
                   isBufferingOutput = true;
