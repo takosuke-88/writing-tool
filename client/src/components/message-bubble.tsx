@@ -1,7 +1,8 @@
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { User, Bot, Loader2 } from "lucide-react";
+import { User, Bot, Loader2, Cpu, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
@@ -24,6 +25,28 @@ export function MessageBubble({
       minute: "2-digit",
     });
   };
+
+  // Extract footer information if present
+  let displayContent = content;
+  let searchModel = null;
+  let llmModel = null;
+
+  if (!isUser && content) {
+    const parts = content.split(/---\s*$/m);
+    if (parts.length > 1) {
+      const mainText = parts.slice(0, -1).join("---").trim();
+      const footerText = parts[parts.length - 1].trim();
+
+      const searchMatch = footerText.match(/Search Model\s*[:：]\s*(.+)/i);
+      const modelMatch = footerText.match(/Model\s*[:：]\s*(.+)/i);
+
+      if (searchMatch || modelMatch) {
+        displayContent = mainText;
+        if (searchMatch) searchModel = searchMatch[1].trim();
+        if (modelMatch) llmModel = modelMatch[1].trim();
+      }
+    }
+  }
 
   return (
     <div className="px-6 py-6 hover:bg-[#f8f9fa] transition-colors">
@@ -137,8 +160,32 @@ export function MessageBubble({
                   },
                 }}
               >
-                {content}
+                {displayContent}
               </ReactMarkdown>
+            )}
+
+            {/* Footer Badges */}
+            {(searchModel || llmModel) && (
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+                {searchModel && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 text-[10px] py-0 px-2 font-normal border-blue-100"
+                  >
+                    <Search className="w-3 h-3" />
+                    {searchModel}
+                  </Badge>
+                )}
+                {llmModel && (
+                  <Badge
+                    variant="outline"
+                    className="text-gray-500 flex items-center gap-1 text-[10px] py-0 px-2 font-normal"
+                  >
+                    <Cpu className="w-3 h-3" />
+                    {llmModel}
+                  </Badge>
+                )}
+              </div>
             )}
           </div>
         </div>

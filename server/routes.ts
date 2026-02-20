@@ -593,6 +593,7 @@ export async function registerRoutes(
         systemInstructions,
         searchMode,
         tavilyApiKey,
+        isDeepResearch = false,
       } = req.body || {};
 
       // Resolve model: if "auto", pick Haiku or Sonnet based on query complexity
@@ -612,7 +613,7 @@ export async function registerRoutes(
           : 0.7;
       const maxTokensParam = typeof maxTokens === "number" ? maxTokens : 2048;
 
-      const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\n検索結果や外部情報が含まれている場合でも、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n口調、性格、振る舞いは必ず System Prompt の指示を守り、検索結果の文体（ニュース記事調など）に引きずられないでください。\n\n【禁止事項】\n・ユーザーの質問を復唱しない。\n・「〜を聞いてくれてありがとう」等の感謝の挨拶は禁止。いきなり本題の回答から始める。\n---`;
+      const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\nあなたが受け取っているプロンプトには、システムが自動で検索した最新の「検索結果」が既に含まれている場合があります。\nユーザーから「今検索した？」のように聞かれた場合、「自ら検索ツールを使っていない」という理由だけで「適当に答えてしまった」「検索していなかった」と謝罪するのは**絶対にやめてください**。\nシステムから提供された検索結果をもとに回答した場合は堂々とその旨を伝え、不要な謝罪は避けてください。\n\nまた、検索結果に引きずられず、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n\n【禁止事項】\n・ユーザーの質問を復唱しない。\n・「〜を聞いてくれてありがとう」等の感謝の挨拶は禁止。いきなり本題の回答から始める。\n・検索ツールを自分で呼ばなかったことを理由に謝罪しない。\n---`;
       const sanitizedMessages = sanitizeHistory(messages);
       const lastUser = sanitizedMessages
         .filter((m: any) => m && m.role === "user")
@@ -660,6 +661,138 @@ export async function registerRoutes(
         ];
         return patterns.some((p) => p.test(t));
       };
+
+      // --- DEEP RESEARCH ORCHESTRATOR FLOW ---
+      if (isDeepResearch) {
+        console.log("[Deep Research] Orchestration flow started (Local)");
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("X-Accel-Buffering", "no");
+
+        try {
+          const lastUserMsg = lastUser?.content || "";
+          if (!lastUserMsg) throw new Error("ユーザーの質問が見つかりません。");
+
+          // Step 1: Perplexity Research
+          res.write(
+            `data: ${JSON.stringify({ type: "status", text: "🔍 [1/4] Perplexityで深くリサーチ中..." })}\n\n`,
+          );
+          let searchResult = "検索結果なし";
+          try {
+            searchResult = await execHighPrecisionSearch(String(lastUserMsg));
+          } catch (e: any) {
+            console.warn("[Deep Research] Perplexity failed:", e.message);
+            res.write(
+              `data: ${JSON.stringify({ type: "status", text: "⚠️ Perplexityが利用できないため、標準検索に切り替えます..." })}\n\n`,
+            );
+            try {
+              searchResult = await execStandardSearch(String(lastUserMsg));
+            } catch (e2) {
+              searchResult = await execEcoSearch(
+                String(lastUserMsg),
+                tavilyApiKey,
+              );
+            }
+          }
+
+          // Step 2: Claude Draft
+          res.write(
+            `data: ${JSON.stringify({ type: "status", text: "✍️ [2/4] Claudeで初期考察(Draft)を作成中..." })}\n\n`,
+          );
+          const draftPrompt = `ユーザーからの質問：\n${lastUserMsg}\n\nPerplexityによるリサーチ結果：\n${searchResult}\n\n上記のリサーチ結果をもとに、ユーザーの質問に対する詳細な「初期考察」を作成してください。`;
+
+          const draftMessage = await anthropic.messages.create({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 3000,
+            messages: [{ role: "user", content: draftPrompt }],
+            system:
+              "あなたは優秀なリサーチャーです。事実に基づいた詳細な初期考察を作成してください。",
+          });
+          const initialDraft =
+            draftMessage.content[0].type === "text"
+              ? draftMessage.content[0].text
+              : "";
+
+          // Step 3: Gemini Critique
+          res.write(
+            `data: ${JSON.stringify({ type: "status", text: "🕵️ [3/4] Geminiで推敲・批判レビュー中..." })}\n\n`,
+          );
+          const critiquePrompt = `ユーザーからの質問：\n${lastUserMsg}\n\n他のAIが作成した初期考察：\n${initialDraft}\n\nあなたは非常に鋭く論理的なレビュアーです。この初期考察に対する「批判的意見」「見落としているかもしれない視点」「別の有力な代替案」を厳格に提示してください。`;
+
+          let critique = "レビュー結果なし（Gemini APIエラー）";
+          try {
+            const geminiApiKey =
+              process.env.AI_INTEGRATIONS_GOOGLE_API_KEY ||
+              process.env.GOOGLE_API_KEY;
+            if (geminiApiKey) {
+              const geminiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: critiquePrompt }] }],
+                    generationConfig: { maxOutputTokens: 2000 },
+                  }),
+                },
+              );
+              if (geminiRes.ok) {
+                const geminiData = await geminiRes.json();
+                if (geminiData.candidates?.[0]?.content?.parts?.[0]?.text) {
+                  critique = geminiData.candidates[0].content.parts[0].text;
+                }
+              }
+            }
+          } catch (e) {
+            console.error("[Deep Research] Gemini Critique Failed:", e);
+          }
+
+          // Step 4: Claude Final
+          res.write(
+            `data: ${JSON.stringify({ type: "status", text: "✨ [4/4] 最終回答を生成中..." })}\n\n`,
+          );
+          const finalPrompt = `ユーザーからの質問：\n${lastUserMsg}\n\n初期の考察：\n${initialDraft}\n\nレビュアーからの批判・別の視点：\n${critique}\n\n【あなたのタスク】\n上記のすべての情報を統合・昇華させ、ユーザーに対する「最終的な回答」を作成してください。\n以下のルールを厳守してください：\n- レビュアーの指摘を反映し、最も深く洗練された回答にすること。\n- 「初期考察では〜」「レビュアーの意見では〜」といった裏側の議論の経緯は一切書かないこと。\n- 余計なメタデータやJSON、挨拶などは含めず、純粋な回答テキストのみを出力すること。`;
+
+          const finalStream = anthropic.messages.stream({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 4000,
+            messages: [{ role: "user", content: finalPrompt }],
+            system:
+              systemInstructions ||
+              "あなたは優秀で論理的なAIアシスタントです。",
+          });
+
+          for await (const event of finalStream) {
+            if (
+              event.type === "content_block_delta" &&
+              (event as any).delta?.type === "text_delta"
+            ) {
+              res.write(
+                `data: ${JSON.stringify({ type: "content", text: (event as any).delta.text })}\n\n`,
+              );
+            }
+          }
+
+          const footer = createFooter(
+            "claude-3-5-sonnet-20241022 (Deep Research)",
+            undefined,
+            "deep_research_orchestrator",
+          );
+          res.write(
+            `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
+          );
+          res.write("data: [DONE]\n\n");
+          return res.end();
+        } catch (err: any) {
+          console.error("[Deep Research] Error:", err);
+          res.write(
+            `data: ${JSON.stringify({ type: "error", message: "Deep Research中にエラーが発生しました: " + err.message })}\n\n`,
+          );
+          return res.end();
+        }
+      }
+      // --- END DEEP RESEARCH ORCHESTRATOR FLOW ---
 
       const forceSearch = searchMode && searchMode !== "auto";
       let injectedResults = "";
