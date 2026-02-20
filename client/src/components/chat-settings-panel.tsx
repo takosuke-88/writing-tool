@@ -52,7 +52,7 @@ const MODELS = [
     available: true,
   },
   {
-    id: "sonar-pro",
+    id: "sonar",
     name: "Perplexity (Online)",
     available: true,
   },

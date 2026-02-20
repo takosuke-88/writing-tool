@@ -107,12 +107,32 @@ function ChatApp() {
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(true); // Default open or closed? Maybe true if user is confused it's gone.
 
-  // Fix temperature if it's out of range (legacy values)
+  // Fix legacy model IDs and temperature
   useEffect(() => {
     if (temperature > 100) {
-      setTemperature(70); // Reset to default
+      setTemperature(70);
     }
-  }, []); // Run once on mount
+    // Migrate legacy/invalid model IDs
+    if (model === "sonar-pro") {
+      setModel("sonar");
+      toast({
+        title: "モデル設定を更新しました",
+        description: "sonar-pro → sonar",
+      });
+    } else if (model === "gemini-3-pro-preview") {
+      setModel("gemini-2.5-pro");
+      toast({
+        title: "モデル設定を更新しました",
+        description: "gemini-3-pro → gemini-2.5-pro",
+      });
+    } else if (model === "claude-4-5-sonnet-latest") {
+      setModel("claude-sonnet-4-5");
+      toast({
+        title: "モデル設定を更新しました",
+        description: "INVALID ID → claude-sonnet-4-5",
+      });
+    }
+  }, [model, temperature]); // Run when model/temp changes (or on mount)
 
   // Handlers
   const handleNewConversation = () => {
