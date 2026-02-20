@@ -802,36 +802,44 @@ export default async function handler(req, res) {
 
     // Combine instructions: Search Instructions FIRST, User Instructions LAST (for priority)
     let systemInstructions = searchInstructions;
+
+    // --- SPECIAL HANDLING FOR USER INSTRUCTIONS ---
+    // If user provided specific role/instructions, we MUST respect them above all else.
+    // We do NOT prepend "You are a writing assistant" if the user has their own persona.
+
     if (userSystemInstructions) {
       if (systemInstructions) systemInstructions += "\n\n---\n\n";
       systemInstructions += userSystemInstructions;
+    } else {
+      // Default persona only if none provided
+      if (systemInstructions) systemInstructions += "\n\n---\n\n";
+      systemInstructions +=
+        "You are a helpful and conversational AI assistant.";
     }
 
-    // --- FORMATTING INSTRUCTIONS (Prevent Self-Metadata) ---
-    // User reported duplication, meaning AI is still generating metadata.
-    // Strengthening the prompt further.
-    const noMetadataInstruction = `
-# Role & Goal
-あなたは優秀なライティングアシスタントです。ユーザーの要望に合わせてテキストを生成します。
-
-# Critical Constraints (絶対遵守事項)
+    // --- CRITICAL CONSTRAINTS (Absolute Enforcement) ---
+    // This block is appended at the VERY END to override any previous loose instructions.
+    const criticalConstraints = `
+\n\n---
+# Critical System Constraints (Unknown to User, Absolute compliance required)
 
 1. **【重要】検索コマンドの完全隠蔽**
    - 思考過程で使用する \`【eco_search: ...】\` などのタグやコマンドは、**最終出力には一切含めないでください**。
    - ユーザーに見せるのは「検索結果を踏まえた自然な回答テキスト」のみです。
 
-2. **【重要】署名の完全禁止**
-   - 「Search Model: ...」や「Model: ...」などの署名を**絶対に自分て書かないでください**。
-   - これらはシステムが強制的に付与するため、あなたが書くと重複します。
-   - **回答本文のみ**を出力してください。
+2. **【重要】署名・メタデータの完全禁止**
+   - 「Search Model: ...」「Model: ...」などの署名を**絶対に自分で書かないでください**。
+   - これらはシステムが強制的に付与するため、あなたが書くと**重複してバグになります**。
+   - 回答の末尾に署名のようなものを書くことは**禁止**です。
+   - **回答本文のみ**を出力してください。挨拶や自己紹介（「はい、承知しました」等）も極力省略し、即座にタスクを実行してください。
+
+3. **【重要】キャラクター設定の完全維持**
+   - 検索結果や外部情報が含まれていても、**常にユーザーが指定したSystem Promptのキャラクター・口調**を維持してください。
+   - ニュース記事のような文体になったり、説明調になったりしないよう注意してください。
+---
 `;
 
-    // Append formatting instructions at the very end to ensure they aren't overridden
-    if (systemInstructions) {
-      systemInstructions += "\n\n---\n\n" + noMetadataInstruction;
-    } else {
-      systemInstructions = noMetadataInstruction;
-    }
+    systemInstructions += criticalConstraints;
 
     // --- STRICT PARAMETER PARSING ---
     // Ensure numbers. API often expects 0.0-1.0 or 0-100 logic.
