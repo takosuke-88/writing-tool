@@ -538,7 +538,7 @@ export async function registerRoutes(
         Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "sonar-pro",
+        model: "sonar",
         messages: [
           {
             role: "user",
@@ -658,24 +658,30 @@ export async function registerRoutes(
       let injectedResults = "";
       let searchInstructions = "";
 
-      // Auto mode: proactively search if query needs real-time info
-      if (
-        searchMode === "auto" &&
-        lastUser?.content &&
-        needsRealtimeSearch(String(lastUser.content))
-      ) {
+      // Debug logging for search flow
+      console.log("[SearchDebug] searchMode:", JSON.stringify(searchMode));
+      console.log(
+        "[SearchDebug] lastUser content:",
+        JSON.stringify(String(lastUser?.content || "").slice(0, 50)),
+      );
+
+      // Auto mode: ALWAYS trigger eco search for every query
+      // Tavily basic search is lightweight and ensures real-time info is always available
+      if (searchMode === "auto" && lastUser?.content) {
+        console.log("[AutoSearch] TRIGGERING eco search...");
         try {
           injectedResults = await execEcoSearch(
             String(lastUser.content),
             tavilyApiKey,
           );
           console.log(
-            "[AutoSearch] Triggered eco search for:",
-            String(lastUser.content).slice(0, 50),
+            "[AutoSearch] SUCCESS, results length:",
+            injectedResults.length,
           );
         } catch (e: any) {
-          console.error("[AutoSearch] Failed:", e?.message);
-          injectedResults = `(検索失敗: ${e?.message || "unknown"})`;
+          console.error("[AutoSearch] FAILED:", e?.message);
+          // Don't block the response if search fails
+          injectedResults = "";
         }
       }
       const TOOLS = [
@@ -946,6 +952,85 @@ export async function registerRoutes(
         if (cleaned) {
           res.write(
             `data: ${JSON.stringify({ type: "content", text: cleaned })}\n\n`,
+          );
+        }
+        const footer = createFooter(model, searchMode);
+        res.write(
+          `data: ${JSON.stringify({ type: "content", text: footer })}\n\n`,
+        );
+        res.write("data: [DONE]\n\n");
+        return res.end();
+      } else if (model.includes("sonar")) {
+        // ── Perplexity API ──
+        const apiKey = process.env.PERPLEXITY_API_KEY;
+        if (!apiKey) {
+          res.write(
+            `data: ${JSON.stringify({
+              type: "error",
+              message: "PERPLEXITY_API_KEY missing",
+            })}\n\n`,
+          );
+          res.write("data: [DONE]\n\n");
+          return res.end();
+        }
+        const pplxMessages = sanitizedMessages
+          .filter(
+            (m: any) =>
+              m && typeof m.content === "string" && m.content.trim() !== "",
+          )
+          .map((m: any) => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: String(m.content),
+          }));
+        if (systemInstruction) {
+          pplxMessages.unshift({
+            role: "system" as any,
+            content: systemInstruction,
+          });
+        }
+        try {
+          const pplxRes = await fetch(
+            "https://api.perplexity.ai/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: pplxMessages,
+                temperature: tempParam,
+                max_tokens: maxTokensParam,
+                stream: false,
+              }),
+            },
+          );
+          if (!pplxRes.ok) {
+            const errText = await pplxRes.text();
+            res.write(
+              `data: ${JSON.stringify({
+                type: "error",
+                message: `${pplxRes.status} ${errText}`,
+              })}\n\n`,
+            );
+            res.write("data: [DONE]\n\n");
+            return res.end();
+          }
+          const pplxData = await pplxRes.json();
+          const pplxContent = pplxData.choices?.[0]?.message?.content || "";
+          const cleaned = sanitizeChunk(String(pplxContent));
+          if (cleaned) {
+            res.write(
+              `data: ${JSON.stringify({ type: "content", text: cleaned })}\n\n`,
+            );
+          }
+        } catch (e: any) {
+          res.write(
+            `data: ${JSON.stringify({
+              type: "error",
+              message: `Perplexity Error: ${e?.message || "unknown"}`,
+            })}\n\n`,
           );
         }
         const footer = createFooter(model, searchMode);
