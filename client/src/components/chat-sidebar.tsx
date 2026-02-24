@@ -147,13 +147,13 @@ export function ChatSidebar({
                   </p>
                 </div>
 
-                <div className="opacity-0 group-hover:opacity-100 flex-shrink-0">
+                <div className="flex-shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] data-[state=open]:opacity-100"
+                        className="h-7 w-7 text-red-500 hover:bg-[#e8f0fe] data-[state=open]:opacity-100"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <MoreVertical className="h-4 w-4" />
