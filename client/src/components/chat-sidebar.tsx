@@ -7,7 +7,14 @@ import {
   Trash2,
   Edit2,
   BarChart3,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Conversation } from "@shared/schema";
@@ -131,39 +138,52 @@ export function ChatSidebar({
                       className="text-sm text-[#202124] font-medium bg-white border border-[#1a73e8] rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 outline-none w-full"
                     />
                   ) : (
-                    <div className="flex items-center gap-1">
-                      <p className="text-sm text-[#202124] truncate font-medium flex-1">
-                        {conversation.title}
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 h-5 w-5 text-[#5f6368] hover:text-[#1a73e8] hover:bg-[#e8f0fe] flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingId(conversation.id);
-                          setEditingTitle(conversation.title);
-                        }}
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    <p className="text-sm text-[#202124] truncate font-medium">
+                      {conversation.title}
+                    </p>
                   )}
                   <p className="text-xs text-[#5f6368] mt-0.5">
                     {formatDate(conversation.updatedAt)}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="opacity-0 group-hover:opacity-100 h-7 w-7 text-[#5f6368] hover:text-[#d93025] hover:bg-[#fce8e6] flex-shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteConversation(conversation.id);
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+
+                <div className="opacity-0 group-hover:opacity-100 flex-shrink-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] data-[state=open]:opacity-100"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(conversation.id);
+                          setEditingTitle(conversation.title);
+                        }}
+                        className="cursor-pointer flex items-center gap-2"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        <span>名前変更</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteConversation(conversation.id);
+                        }}
+                        className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>削除</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             ))
           )}
