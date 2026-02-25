@@ -3,8 +3,11 @@ import pg from "pg";
 import * as schema from "@shared/schema";
 
 // Make database connection optional for development
+// Vercel Postgres provides POSTGRES_URL; legacy code uses DATABASE_URL
 const connectionString =
-  process.env.DATABASE_URL || "postgresql://localhost:5432/writing_tool";
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  "postgresql://localhost:5432/writing_tool";
 
 const pool = new pg.Pool({
   connectionString,
