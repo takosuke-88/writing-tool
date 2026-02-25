@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Menu,
   Plus,
@@ -31,17 +31,27 @@ interface ChatSidebarProps {
   onToggleSettings: () => void;
 }
 
-export function ChatSidebar({
-  conversations,
-  selectedConversationId,
-  onSelectConversation,
-  onNewConversation,
-  onDeleteConversation,
-  onUpdateTitle,
-  onToggleSettings,
-}: ChatSidebarProps) {
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
+// Extracted ConversationItem component to properly scope state per item
+function ConversationItem({
+  conversation,
+  isSelected,
+  editingId,
+  onSelect,
+  onStartEditing,
+  onFinishEditing,
+  onDelete,
+}: {
+  conversation: Conversation;
+  isSelected: boolean;
+  editingId: number | null;
+  onSelect: () => void;
+  onStartEditing: (id: number, title: string) => void;
+  onFinishEditing: (id: number, title: string) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const isEditing = editingId === conversation.id;
+
   const formatDate = (date: Date) => {
     const now = new Date();
     const diffMs = now.getTime() - new Date(date).getTime();
@@ -56,6 +66,170 @@ export function ChatSidebar({
       day: "numeric",
     });
   };
+
+  return (
+    <div
+      className={cn(
+        "group relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
+        isSelected ? "bg-[#e8f0fe]" : "hover:bg-[#f1f3f4]",
+      )}
+      onClick={() => {
+        if (!isEditing) onSelect();
+      }}
+    >
+      <MessageSquare className="h-4 w-4 text-[#5f6368] flex-shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        {isEditing ? (
+          <InlineEditInput
+            initialTitle={conversation.title}
+            onSave={(newTitle) => {
+              onFinishEditing(conversation.id, newTitle);
+            }}
+            onCancel={() => {
+              onFinishEditing(conversation.id, "");
+            }}
+          />
+        ) : (
+          <p className="text-sm text-[#202124] truncate font-medium">
+            {conversation.title}
+          </p>
+        )}
+        <p className="text-xs text-[#5f6368] mt-0.5">
+          {formatDate(conversation.updatedAt)}
+        </p>
+      </div>
+
+      {!isEditing && (
+        <div className="flex-shrink-0">
+          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-[#5f6368] opacity-0 group-hover:opacity-100 hover:bg-[#e8f0fe] data-[state=open]:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-36">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDropdownOpen(false);
+                  // Wait for dropdown to fully close before entering edit mode
+                  setTimeout(() => {
+                    onStartEditing(conversation.id, conversation.title);
+                  }, 150);
+                }}
+                className="cursor-pointer flex items-center gap-2"
+              >
+                <Edit2 className="h-4 w-4" />
+                <span>名前変更</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDropdownOpen(false);
+                  onDelete(conversation.id);
+                }}
+                className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>削除</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Dedicated inline editing component with its own state and lifecycle
+function InlineEditInput({
+  initialTitle,
+  onSave,
+  onCancel,
+}: {
+  initialTitle: string;
+  onSave: (title: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initialTitle);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const committedRef = useRef(false);
+
+  // Focus and select on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 30);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const commit = useCallback(() => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== initialTitle) {
+      onSave(trimmed);
+    } else {
+      onCancel();
+    }
+  }, [value, initialTitle, onSave, onCancel]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => {
+        // Small delay to handle potential race conditions
+        setTimeout(commit, 50);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          committedRef.current = true;
+          onCancel();
+        }
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="text-sm text-[#202124] font-medium bg-white border border-[#1a73e8] rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 outline-none w-full"
+    />
+  );
+}
+
+export function ChatSidebar({
+  conversations,
+  selectedConversationId,
+  onSelectConversation,
+  onNewConversation,
+  onDeleteConversation,
+  onUpdateTitle,
+  onToggleSettings,
+}: ChatSidebarProps) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  const handleStartEditing = useCallback((id: number, _title: string) => {
+    setEditingId(id);
+  }, []);
+
+  const handleFinishEditing = useCallback(
+    (id: number, newTitle: string) => {
+      if (newTitle) {
+        onUpdateTitle(id, newTitle);
+      }
+      setEditingId(null);
+    },
+    [onUpdateTitle],
+  );
 
   return (
     <div className="w-[280px] h-full bg-white border-r border-[#dadce0] flex flex-col">
@@ -100,91 +274,16 @@ export function ChatSidebar({
             </div>
           ) : (
             conversations.map((conversation) => (
-              <div
+              <ConversationItem
                 key={conversation.id}
-                className={cn(
-                  "group relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
-                  selectedConversationId === conversation.id
-                    ? "bg-[#e8f0fe]"
-                    : "hover:bg-[#f1f3f4]",
-                )}
-                onClick={() => onSelectConversation(conversation)}
-              >
-                <MessageSquare className="h-4 w-4 text-[#5f6368] flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  {editingId === conversation.id ? (
-                    <input
-                      type="text"
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={() => {
-                        if (editingTitle.trim()) {
-                          onUpdateTitle(conversation.id, editingTitle.trim());
-                        }
-                        setEditingId(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          if (editingTitle.trim()) {
-                            onUpdateTitle(conversation.id, editingTitle.trim());
-                          }
-                          setEditingId(null);
-                        } else if (e.key === "Escape") {
-                          setEditingId(null);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                      className="text-sm text-[#202124] font-medium bg-white border border-[#1a73e8] rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 outline-none w-full"
-                    />
-                  ) : (
-                    <p className="text-sm text-[#202124] truncate font-medium">
-                      {conversation.title}
-                    </p>
-                  )}
-                  <p className="text-xs text-[#5f6368] mt-0.5">
-                    {formatDate(conversation.updatedAt)}
-                  </p>
-                </div>
-
-                <div className="flex-shrink-0">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-red-500 hover:bg-[#e8f0fe] data-[state=open]:opacity-100"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36">
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingId(conversation.id);
-                          setEditingTitle(conversation.title);
-                        }}
-                        className="cursor-pointer flex items-center gap-2"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                        <span>名前変更</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteConversation(conversation.id);
-                        }}
-                        className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span>削除</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
+                conversation={conversation}
+                isSelected={selectedConversationId === conversation.id}
+                editingId={editingId}
+                onSelect={() => onSelectConversation(conversation)}
+                onStartEditing={handleStartEditing}
+                onFinishEditing={handleFinishEditing}
+                onDelete={onDeleteConversation}
+              />
             ))
           )}
         </div>
