@@ -55,18 +55,43 @@ function useLocalStorage<T>(
 function ChatApp() {
   const { toast } = useToast();
 
-  // State with localStorage persistence
-  const [conversations, setConversations] = useLocalStorage<Conversation[]>(
-    "chat-conversations",
-    getAllMockConversations(),
-  );
-  const [selectedConversationId, setSelectedConversationId] = useLocalStorage<
+  // State from API
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<
     number | null
-  >("chat-selected-id", 1);
-  const [messages, setMessages] = useLocalStorage<Record<number, Message[]>>(
-    "chat-messages",
-    mockMessages,
-  );
+  >(null);
+  const [messages, setMessages] = useState<Record<number, Message[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch initial data
+  useEffect(() => {
+    fetch("/api/conversations")
+      .then((res) => res.json())
+      .then((data) => {
+        setConversations(data);
+        if (data.length > 0) {
+          const firstId = data[0].id;
+          setSelectedConversationId(firstId);
+          fetchMessages(firstId);
+        }
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load conversations", err);
+        setIsLoading(false);
+      });
+  }, []);
+
+  const fetchMessages = async (convId: number) => {
+    try {
+      const res = await fetch(`/api/conversations/${convId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setMessages((prev) => ({ ...prev, [convId]: data.messages || [] }));
+    } catch (err) {
+      console.error("Failed to fetch messages", err);
+    }
+  };
   const [isGenerating, setIsGenerating] = useState(false);
   const [systemInstructions, setSystemInstructions] = useLocalStorage<string>(
     "chat-system-instructions",
@@ -139,65 +164,89 @@ function ChatApp() {
   }, [model, temperature]); // Run when model/temp changes (or on mount)
 
   // Handlers
-  const handleNewConversation = () => {
-    const maxId =
-      conversations.length > 0
-        ? Math.max(...conversations.map((c) => c.id))
-        : 0;
-    const newId = maxId + 1;
-    const newConversation: Conversation = {
-      id: newId,
-      title: "新しい会話",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      model: "claude-sonnet-4-5",
-      temperature: 70,
-      maxTokens: 4096,
-      topP: 100,
-    };
-
-    setConversations([newConversation, ...conversations]);
-    setMessages({ ...messages, [newId]: [] });
-    setSelectedConversationId(newId);
-
-    toast({
-      title: "新しい会話を作成しました",
-    });
+  const handleNewConversation = async () => {
+    try {
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "新しい会話",
+          model,
+          temperature,
+          maxTokens,
+          topP,
+        }),
+      });
+      const newConv = await res.json();
+      setConversations([newConv, ...conversations]);
+      setMessages((prev) => ({ ...prev, [newConv.id]: [] }));
+      setSelectedConversationId(newConv.id);
+      toast({ title: "新しい会話を作成しました" });
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "エラー",
+        description: "会話の作成に失敗しました",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSelectConversation = (conversation: Conversation) => {
     setSelectedConversationId(conversation.id);
-    setModel(conversation.model);
-    setTemperature(conversation.temperature);
-    setMaxTokens(conversation.maxTokens);
-    setTopP(conversation.topP);
-  };
-
-  const handleDeleteConversation = (id: number) => {
-    setConversations(conversations.filter((c) => c.id !== id));
-    const newMessages = { ...messages };
-    delete newMessages[id];
-    setMessages(newMessages);
-
-    if (selectedConversationId === id) {
-      setSelectedConversationId(conversations[0]?.id || null);
+    setModel(conversation.model || "claude-sonnet-4-5");
+    setTemperature(conversation.temperature || 70);
+    setMaxTokens(conversation.maxTokens || 4096);
+    setTopP(conversation.topP || 100);
+    if (!messages[conversation.id]) {
+      fetchMessages(conversation.id);
     }
-
-    toast({
-      title: "会話を削除しました",
-    });
   };
 
-  const handleUpdateTitle = (id: number, title: string) => {
-    setConversations(
-      conversations.map((c) =>
-        c.id === id ? { ...c, title, updatedAt: new Date() } : c,
-      ),
-    );
+  const handleDeleteConversation = async (id: number) => {
+    try {
+      await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+      setConversations(conversations.filter((c) => c.id !== id));
+      const newMessages = { ...messages };
+      delete newMessages[id];
+      setMessages(newMessages);
 
-    toast({
-      title: "タイトルを更新しました",
-    });
+      if (selectedConversationId === id) {
+        const nextConv = conversations.find((c) => c.id !== id);
+        setSelectedConversationId(nextConv ? nextConv.id : null);
+        if (nextConv) fetchMessages(nextConv.id);
+      }
+
+      toast({ title: "会話を削除しました" });
+    } catch (err) {
+      toast({
+        title: "エラー",
+        description: "削除に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateTitle = async (id: number, title: string) => {
+    try {
+      await fetch(`/api/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      setConversations(
+        conversations.map((c) =>
+          c.id === id ? { ...c, title, updatedAt: new Date() } : c,
+        ),
+      );
+      toast({ title: "タイトルを更新しました" });
+    } catch (err) {
+      toast({
+        title: "エラー",
+        description: "タイトルの更新に失敗しました",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSendMessage = async (content: string) => {
@@ -219,6 +268,17 @@ function ChatApp() {
         userMessage,
       ],
     });
+
+    try {
+      // Save user message to DB
+      await fetch(`/api/conversations/${selectedConversationId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "user", content }),
+      });
+    } catch (err) {
+      console.error("Failed to save user message to DB", err);
+    }
 
     // Update conversation title if it's the first message
     const currentMessages = messages[selectedConversationId] || [];
@@ -359,6 +419,19 @@ function ChatApp() {
               }
             }
           }
+        }
+      }
+
+      // Save AI message to DB when completed
+      if (fullText) {
+        try {
+          await fetch(`/api/conversations/${selectedConversationId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role: "assistant", content: fullText }),
+          });
+        } catch (err) {
+          console.error("Failed to save AI message to DB", err);
         }
       }
     } catch (error) {

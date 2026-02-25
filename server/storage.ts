@@ -1,12 +1,23 @@
 import { db, isDatabaseAvailable } from "./db";
-import { articles, systemPrompts, apiUsageLogs } from "@shared/schema";
-import { eq, desc, sql, gte } from "drizzle-orm";
+import {
+  articles,
+  systemPrompts,
+  apiUsageLogs,
+  conversations,
+  messages as dbMessages,
+} from "@shared/schema";
+import { eq, desc, asc, sql, gte } from "drizzle-orm";
 import type {
   Article,
   InsertArticle,
   SystemPrompt,
   InsertSystemPrompt,
   ApiUsageLog,
+  Conversation,
+  InsertConversation,
+  Message,
+  InsertMessage,
+  ConversationWithMessages,
 } from "@shared/schema";
 
 export interface UsageStats {
@@ -39,19 +50,37 @@ export interface IStorage {
     prompt: Partial<InsertSystemPrompt>,
   ): Promise<SystemPrompt | undefined>;
   deleteSystemPrompt(id: string): Promise<void>;
-  // getApiUsageStats is deprecated/handled by KV now, but kept for interface compat if needed
   getApiUsageStats(): Promise<UsageStats>;
+
+  // Conversation and Message methods
+  getConversations(): Promise<Conversation[]>;
+  getConversation(id: number): Promise<ConversationWithMessages | undefined>;
+  createConversation(conversation: InsertConversation): Promise<Conversation>;
+  updateConversation(
+    id: number,
+    data: Partial<InsertConversation>,
+  ): Promise<Conversation | undefined>;
+  deleteConversation(id: number): Promise<void>;
+  addMessage(message: InsertMessage): Promise<Message>;
 }
 
 export class MemStorage implements IStorage {
   private articles: Map<number, Article>;
   private systemPrompts: Map<string, SystemPrompt>;
+  private conversations: Map<number, Conversation>;
+  private messages: Map<number, Message>;
   private currentArticleId: number;
+  private currentConversationId: number;
+  private currentMessageId: number;
 
   constructor() {
     this.articles = new Map();
     this.systemPrompts = new Map();
+    this.conversations = new Map();
+    this.messages = new Map();
     this.currentArticleId = 1;
+    this.currentConversationId = 1;
+    this.currentMessageId = 1;
   }
 
   async getAllArticles(): Promise<Article[]> {
@@ -122,6 +151,82 @@ export class MemStorage implements IStorage {
       dailyBreakdown: [],
     };
   }
+
+  // Conversation and Message methods
+  async getConversations(): Promise<Conversation[]> {
+    return Array.from(this.conversations.values()).sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+    );
+  }
+
+  async getConversation(
+    id: number,
+  ): Promise<ConversationWithMessages | undefined> {
+    const conv = this.conversations.get(id);
+    if (!conv) return undefined;
+    const msgs = Array.from(this.messages.values())
+      .filter((m) => m.conversationId === id)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((m): Message => ({ ...m, role: m.role as "user" | "assistant" }));
+    return {
+      ...conv,
+      messages: msgs as unknown as ConversationWithMessages["messages"],
+    };
+  }
+
+  async createConversation(data: InsertConversation): Promise<Conversation> {
+    const id = this.currentConversationId++;
+    const conversation: Conversation = {
+      ...data,
+      id,
+      title: data.title || "新しい会話",
+      model: data.model || "claude-sonnet-4-5",
+      temperature: data.temperature ?? 70,
+      maxTokens: data.maxTokens ?? 4096,
+      topP: data.topP ?? 100,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.conversations.set(id, conversation);
+    return conversation;
+  }
+
+  async updateConversation(
+    id: number,
+    data: Partial<InsertConversation>,
+  ): Promise<Conversation | undefined> {
+    const existing = this.conversations.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data, updatedAt: new Date() };
+    this.conversations.set(id, updated);
+    return updated;
+  }
+
+  async deleteConversation(id: number): Promise<void> {
+    this.conversations.delete(id);
+    const msgsToDelete = Array.from(this.messages.values())
+      .filter((m) => m.conversationId === id)
+      .map((m) => m.id);
+    msgsToDelete.forEach((msgId) => this.messages.delete(msgId));
+  }
+
+  async addMessage(data: InsertMessage): Promise<Message> {
+    const id = this.currentMessageId++;
+    const message: Message = {
+      ...data,
+      id,
+      createdAt: new Date(),
+    };
+    this.messages.set(id, message);
+    const conv = this.conversations.get(data.conversationId);
+    if (conv) {
+      this.conversations.set(data.conversationId, {
+        ...conv,
+        updatedAt: new Date(),
+      });
+    }
+    return message;
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -132,8 +237,7 @@ export class DatabaseStorage implements IStorage {
         .from(articles)
         .orderBy(desc(articles.generatedAt));
     } catch (error) {
-      // console.warn("Database error, returning empty array:", error);
-      throw error; // Let it throw to trigger fallback if handled upstream, or catch
+      throw error;
     }
   }
 
@@ -192,6 +296,73 @@ export class DatabaseStorage implements IStorage {
       dailyBreakdown: [],
     };
   }
+
+  // Conversation and Message methods (Database)
+  async getConversations(): Promise<Conversation[]> {
+    return await db
+      .select()
+      .from(conversations)
+      .orderBy(desc(conversations.updatedAt));
+  }
+
+  async getConversation(
+    id: number,
+  ): Promise<ConversationWithMessages | undefined> {
+    const convResult = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, id));
+    if (convResult.length === 0) return undefined;
+
+    const msgsResult = await db
+      .select()
+      .from(dbMessages)
+      .where(eq(dbMessages.conversationId, id))
+      .orderBy(asc(dbMessages.createdAt));
+    return {
+      ...convResult[0],
+      messages: msgsResult as unknown as ConversationWithMessages["messages"],
+    };
+  }
+
+  async createConversation(data: InsertConversation): Promise<Conversation> {
+    const result = await db
+      .insert(conversations)
+      .values({
+        ...data,
+        title: data.title || "新しい会話",
+        model: data.model || "claude-sonnet-4-5",
+      })
+      .returning();
+    return result[0];
+  }
+
+  async updateConversation(
+    id: number,
+    data: Partial<InsertConversation>,
+  ): Promise<Conversation | undefined> {
+    const result = await db
+      .update(conversations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(conversations.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteConversation(id: number): Promise<void> {
+    // cascade delete is handled by the foreign key constraint in schema
+    await db.delete(conversations).where(eq(conversations.id, id));
+  }
+
+  async addMessage(data: InsertMessage): Promise<Message> {
+    const result = await db.insert(dbMessages).values(data).returning();
+    // Update conversation updatedAt
+    await db
+      .update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversations.id, data.conversationId));
+    return result[0];
+  }
 }
 
 // Determine which storage to use
@@ -227,4 +398,11 @@ export const storage: IStorage = {
     (await getStorage()).updateSystemPrompt(id, p),
   deleteSystemPrompt: async (id) => (await getStorage()).deleteSystemPrompt(id),
   getApiUsageStats: async () => (await getStorage()).getApiUsageStats(),
+  getConversations: async () => (await getStorage()).getConversations(),
+  getConversation: async (id) => (await getStorage()).getConversation(id),
+  createConversation: async (c) => (await getStorage()).createConversation(c),
+  updateConversation: async (id, c) =>
+    (await getStorage()).updateConversation(id, c),
+  deleteConversation: async (id) => (await getStorage()).deleteConversation(id),
+  addMessage: async (m) => (await getStorage()).addMessage(m),
 };

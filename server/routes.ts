@@ -582,6 +582,85 @@ export async function registerRoutes(
     const data = await res.json();
     return data.choices?.[0]?.message?.content || "";
   };
+  // ============================================
+  // Conversations API
+  // ============================================
+
+  app.get("/api/conversations", async (_req, res) => {
+    try {
+      const convs = await storage.getConversations();
+      res.json(convs);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/conversations", async (req, res) => {
+    try {
+      const conv = await storage.createConversation(req.body);
+      res.json(conv);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/conversations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const conv = await storage.getConversation(id);
+      if (!conv) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      res.json(conv);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/conversations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+      const conv = await storage.updateConversation(id, req.body);
+      if (!conv) return res.status(404).json({ error: "Not found" });
+      res.json(conv);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/conversations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+      await storage.deleteConversation(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+      const message = await storage.addMessage({
+        conversationId: id,
+        role: req.body.role,
+        content: req.body.content,
+      });
+      res.json(message);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/chat", async (req, res) => {
     try {
       const {
