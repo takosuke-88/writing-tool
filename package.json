@@ -2,6 +2,7 @@
   "name": "rest-express",
   "version": "1.0.0",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "dev": "cross-env NODE_ENV=development PORT=5002 tsx server/index.ts",
     "dev:client": "vite --port 5174",
