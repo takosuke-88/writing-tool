@@ -380,6 +380,16 @@ async function getStorage(): Promise<IStorage> {
     console.log("✅ Database available, using DatabaseStorage");
     storageImplementation = new DatabaseStorage();
   } else {
+    // In production, we MUST have a database. Do not fallback to memory.
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "❌ Database unavailable in production environment. MemStorage fallback is disabled.",
+      );
+      throw new Error(
+        "データベース設定が必要です。Vercel Postgres が正しく設定されていません。",
+      );
+    }
+
     console.log("⚠️ Database unavailable, falling back to MemStorage");
     storageImplementation = new MemStorage();
   }

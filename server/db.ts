@@ -1,5 +1,5 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "../shared/schema";
 
 // Make database connection optional for development
@@ -9,19 +9,20 @@ const connectionString =
   process.env.POSTGRES_URL ||
   "postgresql://localhost:5432/writing_tool";
 
-const pool = new pg.Pool({
-  connectionString,
-});
+// Create Neon HTTP connection client (poolless, ideal for Vercel Edge/Serverless Functions)
+const sql = neon(connectionString);
 
-export const db = drizzle(pool, { schema });
+export const db = drizzle(sql, { schema });
 
-// Check if database is available
+// Check if database is available via HTTP request
 export async function isDatabaseAvailable(): Promise<boolean> {
   try {
-    await pool.query("SELECT 1");
+    await sql`SELECT 1`;
     return true;
   } catch (error) {
-    console.warn("⚠️  Database not available. Running in mock data mode.");
+    console.warn(
+      "⚠️  Database not available. Running in mock data mode or throwing in production.",
+    );
     return false;
   }
 }
