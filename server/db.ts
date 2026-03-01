@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import * as schema from "@shared/schema";
+import * as schema from "../shared/schema";
 
 // Make database connection optional for development
 // Vercel Postgres provides POSTGRES_URL; legacy code uses DATABASE_URL

@@ -5,7 +5,7 @@ import {
   apiUsageLogs,
   conversations,
   messages as dbMessages,
-} from "@shared/schema";
+} from "../shared/schema";
 import { eq, desc, asc, sql, gte } from "drizzle-orm";
 import type {
   Article,
@@ -18,7 +18,7 @@ import type {
   Message,
   InsertMessage,
   ConversationWithMessages,
-} from "@shared/schema";
+} from "../shared/schema";
 
 export interface UsageStats {
   today: {

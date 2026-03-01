@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   generateArticleRequestSchema,
   insertSystemPromptSchema,
-} from "@shared/schema";
+} from "../shared/schema";
 
 const anthropic = new Anthropic({
   apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
