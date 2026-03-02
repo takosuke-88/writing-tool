@@ -1,4 +1,8 @@
-import { storage } from "../../server/storage";
+import {
+  getConversation,
+  updateConversation,
+  deleteConversation,
+} from "../../_lib/storage";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -11,25 +15,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === "GET") {
     try {
-      const conv = await storage.getConversation(conversationId);
+      const conv = await getConversation(conversationId);
       if (!conv) return res.status(404).json({ error: "Not found" });
       return res.status(200).json(conv);
     } catch (e: any) {
+      console.error(`GET /api/conversations/${id} error:`, e);
       return res.status(500).json({ error: e.message });
     }
   } else if (req.method === "PATCH") {
     try {
-      const conv = await storage.updateConversation(conversationId, req.body);
+      const conv = await updateConversation(conversationId, req.body);
       if (!conv) return res.status(404).json({ error: "Not found" });
       return res.status(200).json(conv);
     } catch (e: any) {
+      console.error(`PATCH /api/conversations/${id} error:`, e);
       return res.status(500).json({ error: e.message });
     }
   } else if (req.method === "DELETE") {
     try {
-      await storage.deleteConversation(conversationId);
+      await deleteConversation(conversationId);
       return res.status(200).json({ success: true });
     } catch (e: any) {
+      console.error(`DELETE /api/conversations/${id} error:`, e);
       return res.status(500).json({ error: e.message });
     }
   }

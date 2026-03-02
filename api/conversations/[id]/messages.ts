@@ -1,4 +1,4 @@
-import { storage } from "../../../server/storage";
+import { addMessage } from "../../../_lib/storage";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -11,13 +11,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === "POST") {
     try {
-      const message = await storage.addMessage({
+      const message = await addMessage({
         conversationId,
         role: req.body.role,
         content: req.body.content,
       });
       return res.status(200).json(message);
     } catch (e: any) {
+      console.error(`POST /api/conversations/${id}/messages error:`, e);
       return res.status(500).json({ error: e.message });
     }
   }
