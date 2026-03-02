@@ -1,16 +1,12 @@
-import { db } from "./db";
+import { getDb } from "./db";
 import { conversations, messages } from "./schema";
 import { eq, desc, asc } from "drizzle-orm";
-import type {
-  Conversation,
-  InsertConversation,
-  Message,
-  InsertMessage,
-} from "./schema";
+import type { Conversation, InsertConversation, Message } from "./schema";
 
 // --- Conversation CRUD ---
 
 export async function getConversations(): Promise<Conversation[]> {
+  const db = getDb();
   return await db
     .select()
     .from(conversations)
@@ -18,6 +14,7 @@ export async function getConversations(): Promise<Conversation[]> {
 }
 
 export async function getConversation(id: number) {
+  const db = getDb();
   const convResult = await db
     .select()
     .from(conversations)
@@ -39,6 +36,7 @@ export async function getConversation(id: number) {
 export async function createConversation(
   data: Partial<InsertConversation>,
 ): Promise<Conversation> {
+  const db = getDb();
   const result = await db
     .insert(conversations)
     .values({
@@ -56,6 +54,7 @@ export async function updateConversation(
   id: number,
   data: Partial<InsertConversation>,
 ): Promise<Conversation | undefined> {
+  const db = getDb();
   const result = await db
     .update(conversations)
     .set({ ...data, updatedAt: new Date() })
@@ -65,6 +64,7 @@ export async function updateConversation(
 }
 
 export async function deleteConversation(id: number): Promise<void> {
+  const db = getDb();
   await db.delete(conversations).where(eq(conversations.id, id));
 }
 
@@ -75,6 +75,7 @@ export async function addMessage(data: {
   role: string;
   content: string;
 }): Promise<Message> {
+  const db = getDb();
   const result = await db.insert(messages).values(data).returning();
   // Update conversation updatedAt
   await db
