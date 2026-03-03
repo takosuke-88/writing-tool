@@ -38,7 +38,7 @@ export function MessageBubble({
       const footerText = parts[parts.length - 1].trim();
 
       const searchMatch = footerText.match(/Search Model\s*[:：]\s*(.+)/i);
-      const modelMatch = footerText.match(/Model\s*[:：]\s*(.+)/i);
+      const modelMatch = footerText.match(/^Model\s*[:：]\s*(.+)/im);
 
       if (searchMatch || modelMatch) {
         displayContent = mainText;
