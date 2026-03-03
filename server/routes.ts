@@ -604,11 +604,11 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/conversations/:id", async (req, res) => {
+  app.get("/api/conversation-details", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.query.id as string);
       if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid ID" });
+        return res.status(400).json({ error: "Invalid ID parameter" });
       }
       const conv = await storage.getConversation(id);
       if (!conv) {
@@ -620,10 +620,11 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/conversations/:id", async (req, res) => {
+  app.patch("/api/conversation-details", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const id = parseInt(req.query.id as string);
+      if (isNaN(id))
+        return res.status(400).json({ error: "Invalid ID parameter" });
 
       const conv = await storage.updateConversation(id, req.body);
       if (!conv) return res.status(404).json({ error: "Not found" });
@@ -633,10 +634,11 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/conversations/:id", async (req, res) => {
+  app.delete("/api/conversation-details", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const id = parseInt(req.query.id as string);
+      if (isNaN(id))
+        return res.status(400).json({ error: "Invalid ID parameter" });
 
       await storage.deleteConversation(id);
       res.json({ success: true });
@@ -645,10 +647,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/conversations/:id/messages", async (req, res) => {
+  app.post("/api/conversation-messages", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const id = parseInt(req.query.id as string);
+      if (isNaN(id))
+        return res.status(400).json({ error: "Invalid ID parameter" });
 
       const message = await storage.addMessage({
         conversationId: id,

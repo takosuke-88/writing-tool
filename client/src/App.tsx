@@ -84,7 +84,7 @@ function ChatApp() {
 
   const fetchMessages = async (convId: number) => {
     try {
-      const res = await fetch(`/api/conversations/${convId}`);
+      const res = await fetch(`/api/conversation-details?id=${convId}`);
       if (!res.ok) return;
       const data = await res.json();
       setMessages((prev) => ({ ...prev, [convId]: data.messages || [] }));
@@ -205,7 +205,7 @@ function ChatApp() {
 
   const handleDeleteConversation = async (id: number) => {
     try {
-      await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+      await fetch(`/api/conversation-details?id=${id}`, { method: "DELETE" });
       setConversations(conversations.filter((c) => c.id !== id));
       const newMessages = { ...messages };
       delete newMessages[id];
@@ -229,7 +229,7 @@ function ChatApp() {
 
   const handleUpdateTitle = async (id: number, title: string) => {
     try {
-      await fetch(`/api/conversations/${id}`, {
+      await fetch(`/api/conversation-details?id=${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
@@ -271,7 +271,7 @@ function ChatApp() {
 
     try {
       // Save user message to DB
-      await fetch(`/api/conversations/${selectedConversationId}/messages`, {
+      await fetch(`/api/conversation-messages?id=${selectedConversationId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: "user", content }),
@@ -425,11 +425,14 @@ function ChatApp() {
       // Save AI message to DB when completed
       if (fullText) {
         try {
-          await fetch(`/api/conversations/${selectedConversationId}/messages`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role: "assistant", content: fullText }),
-          });
+          await fetch(
+            `/api/conversation-messages?id=${selectedConversationId}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ role: "assistant", content: fullText }),
+            },
+          );
         } catch (err) {
           console.error("Failed to save AI message to DB", err);
         }

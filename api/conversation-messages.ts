@@ -1,4 +1,4 @@
-import { addMessage } from "../../../_lib/storage.js";
+import { addMessage } from "./_lib/storage.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -6,7 +6,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const conversationId = parseInt(id as string, 10);
 
   if (isNaN(conversationId)) {
-    return res.status(400).json({ error: "Invalid conversation ID" });
+    return res.status(400).json({ error: "Invalid conversation ID parameter" });
   }
 
   if (req.method === "POST") {
