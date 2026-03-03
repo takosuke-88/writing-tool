@@ -1,7 +1,7 @@
-import { getDb } from "./db";
-import { conversations, messages } from "./schema";
+import { getDb } from "./db.js";
+import { conversations, messages } from "./schema.js";
 import { eq, desc, asc } from "drizzle-orm";
-import type { Conversation, InsertConversation, Message } from "./schema";
+import type { Conversation, InsertConversation, Message } from "./schema.js";
 
 // --- Conversation CRUD ---
 

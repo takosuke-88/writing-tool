@@ -1,4 +1,4 @@
-import { addMessage } from "../../../_lib/storage";
+import { addMessage } from "../../../_lib/storage.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
