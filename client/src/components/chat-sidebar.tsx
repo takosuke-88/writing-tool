@@ -49,6 +49,8 @@ function ConversationItem({
   onFinishEditing: (id: number, title: string) => void;
   onDelete: (id: number) => void;
 }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const isEditing = editingId === conversation.id;
 
   const formatDate = (date: Date) => {
@@ -69,9 +71,11 @@ function ConversationItem({
   return (
     <div
       className={cn(
-        "group relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
+        "relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
         isSelected ? "bg-[#e8f0fe]" : "hover:bg-[#f1f3f4]",
       )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onClick={() => {
         if (!isEditing) onSelect();
       }}
@@ -100,14 +104,16 @@ function ConversationItem({
 
       {!isEditing && (
         <div className="flex-shrink-0">
-          <DropdownMenu>
+          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 className={cn(
                   "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
-                  "opacity-100 md:opacity-0 md:group-hover:opacity-100 data-[state=open]:opacity-100",
+                  isHovered || dropdownOpen
+                    ? "opacity-100"
+                    : "opacity-0 md:opacity-0",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -118,7 +124,7 @@ function ConversationItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Wait for dropdown to fully close before entering edit mode
+                  setDropdownOpen(false);
                   setTimeout(() => {
                     onStartEditing(conversation.id, conversation.title);
                   }, 150);
@@ -131,6 +137,7 @@ function ConversationItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
+                  setDropdownOpen(false);
                   onDelete(conversation.id);
                 }}
                 className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
