@@ -32,9 +32,9 @@ export function MessageBubble({
   let llmModel = null;
 
   if (!isUser && content) {
-    const parts = content.split(/---\s*$/m);
+    const parts = content.split(/\n---\s*\n/);
     if (parts.length > 1) {
-      const mainText = parts.slice(0, -1).join("---").trim();
+      const mainText = parts.slice(0, -1).join("\n---\n").trim();
       const footerText = parts[parts.length - 1].trim();
 
       const searchMatch = footerText.match(/Search Model\s*[:：]\s*(.+)/i);
