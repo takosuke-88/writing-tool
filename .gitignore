@@ -13,3 +13,5 @@ vite.config.ts.*
 # Vercel
 .vercel
 nul
+.vercel
+.env*.local

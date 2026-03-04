@@ -119,16 +119,35 @@ export async function registerRoutes(
     process.env.DEFAULT_MODEL || "claude-sonnet-4-5-20250929";
   const HAIKU_MODEL = process.env.HAIKU_MODEL || "claude-haiku-4-5-20251001";
 
-  // Simple query detection for auto model routing
-  const isSimpleQuery = (text: string): boolean => {
+  // Advanced query detection for auto model routing & deep research fallback
+  const analyzeComplexity = (
+    text: string,
+  ): "simple" | "technical" | "math" | "creative" | "complex" => {
     const trimmed = text.trim();
-    // Short messages (under 30 chars) are likely simple
-    if (trimmed.length < 30) return true;
-    // Greeting patterns
-    const greetings =
-      /^(こんにちは|こんばんは|おはよう|やあ|ども|hi|hello|hey|おつかれ|ありがとう|さようなら|bye|お疲れ|よろしく|はじめまして|元気|調子|テスト)/i;
-    if (greetings.test(trimmed)) return true;
-    return false;
+    if (/コード|プログラミング|API|関数|エラー/i.test(trimmed))
+      return "technical";
+    if (/計算|数式|グラフ/i.test(trimmed)) return "math";
+    if (/小説|物語|創作|シナリオ/i.test(trimmed)) return "creative";
+
+    // Short messages and greetings
+    if (trimmed.length < 50) {
+      if (
+        /^(こんにちは|こんばんは|おはよう|やあ|ども|hi|hello|hey|おつかれ|ありがとう|さようなら|bye|お疲れ|よろしく|はじめまして|元気|調子|テスト)/i.test(
+          trimmed,
+        )
+      ) {
+        return "simple";
+      }
+      return "simple";
+    }
+
+    if (
+      trimmed.length > 200 ||
+      /理由|原因|背景|考察|比較|分析|教えて|とは/i.test(trimmed)
+    )
+      return "complex";
+
+    return "complex";
   };
 
   const normalizeModel = (requested?: string): string => {
@@ -678,17 +697,39 @@ export async function registerRoutes(
         isDeepResearch = false,
       } = req.body || {};
 
-      // Resolve model: if "auto", pick Haiku or Sonnet based on query complexity
+      // Resolve model and complexity: if "auto", pick optimal model based on query complexity
       const isAutoModel = !requestedModel || requestedModel === "auto";
       const lastUserContent = Array.isArray(messages)
         ? messages.filter((m: any) => m?.role === "user").slice(-1)[0]
             ?.content || ""
         : "";
-      const model = isAutoModel
-        ? isSimpleQuery(String(lastUserContent))
-          ? HAIKU_MODEL
-          : DEFAULT_MODEL
-        : normalizeModel(requestedModel);
+
+      const complexity = analyzeComplexity(String(lastUserContent));
+
+      let model = requestedModel;
+      if (isAutoModel) {
+        if (complexity === "simple") {
+          model = HAIKU_MODEL;
+        } else if (complexity === "technical" || complexity === "math") {
+          model = "gemini-1.5-pro"; // 過去はGeminiが技術/数学担当だった。現在はgemini-1.5-proやflashなどを利用
+        } else if (complexity === "creative") {
+          model = DEFAULT_MODEL; // Sonnet
+        } else {
+          model = DEFAULT_MODEL; // complex or fallback is Sonnet
+        }
+      } else {
+        model = normalizeModel(requestedModel);
+      }
+
+      // Auto Deep Research (Consensus) Fallback
+      // If auto mode and complex query, automatically trigger the deep research / consensus orchestrator
+      let effectivelyDeepResearch = isDeepResearch;
+      if (isAutoModel && complexity === "complex" && !isDeepResearch) {
+        console.log(
+          "[Auto Routing] Complex query detected. Automatically falling back to Deep Research (Consensus) Flow.",
+        );
+        effectivelyDeepResearch = true;
+      }
       const tempParam =
         typeof temperature === "number"
           ? Math.max(0, Math.min(100, temperature)) / 100
@@ -745,7 +786,7 @@ export async function registerRoutes(
       };
 
       // --- DEEP RESEARCH ORCHESTRATOR FLOW ---
-      if (isDeepResearch) {
+      if (effectivelyDeepResearch) {
         console.log("[Deep Research] Orchestration flow started (Local)");
         res.setHeader("Content-Type", "text/event-stream");
         res.setHeader("Cache-Control", "no-cache");
