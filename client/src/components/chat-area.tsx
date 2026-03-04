@@ -15,8 +15,6 @@ interface ChatAreaProps {
   onUpdateTitle: (title: string) => void;
   onStopGeneration?: () => void;
   isGenerating?: boolean;
-  isDeepResearch?: boolean;
-  onDeepResearchChange?: (enabled: boolean) => void;
 }
 
 export function ChatArea({
@@ -27,8 +25,6 @@ export function ChatArea({
   onUpdateTitle,
   onStopGeneration,
   isGenerating = false,
-  isDeepResearch = false,
-  onDeepResearchChange,
 }: ChatAreaProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(title);
@@ -174,8 +170,6 @@ export function ChatArea({
         onSend={onSendMessage}
         onStop={onStopGeneration}
         isGenerating={isGenerating}
-        isDeepResearch={isDeepResearch}
-        onDeepResearchChange={onDeepResearchChange}
       />
     </div>
   );

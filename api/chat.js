@@ -818,7 +818,6 @@ export default async function handler(req, res) {
       topP,
       systemInstructions: userSystemInstructions,
       searchMode = "auto", // Default to auto
-      isDeepResearch = false,
     } = req.body;
 
     // Auto Model Route and Deep Research automatic trigger
@@ -826,210 +825,13 @@ export default async function handler(req, res) {
     const lastUserMsgText = messages[messages.length - 1]?.content || "";
     const complexityStr = analyzeComplexity(lastUserMsgText);
 
-    let effectivelyDeepResearch = isDeepResearch;
-    if (isAutoModel && complexityStr === "complex" && !isDeepResearch) {
+    let consensusPrompt = "";
+    if (complexityStr === "complex") {
       console.log(
-        "[Auto Routing] Complex query detected. Outputting via Deep Research.",
+        "[Auto Routing] Complex query detected. Applying Consensus Prompt.",
       );
-      effectivelyDeepResearch = true;
+      consensusPrompt = `\n\n【特別指示：合議制アプローチ】\nこの質問は複雑であり、多角的な視点からの深い考察が必要です。\n深呼吸をして、複数の専門家AIペルソナ（例えば技術者、批評家、ユーザー視点など）が内部で議論プロセスを経てから最終的な結論を導き出してください。\n1. 各専門家の視点から初期考察を行う\n2. 互いの意見に対して批判的なレビューと代替案を出し合う\n3. 全ての視点を統合し、最も洗練された最終回答を提示する\n（思考プロセスを<thinking>等のタグで出力しても構いません）`;
     }
-
-    // --- DEEP RESEARCH ORCHESTRATOR FLOW ---
-    if (effectivelyDeepResearch) {
-      console.log("[Deep Research] Orchestration flow started");
-
-      try {
-        // Extract user query (last message)
-        const lastUserMsg = messages[messages.length - 1]?.content || "";
-        if (!lastUserMsg) throw new Error("ユーザーの質問が見つかりません。");
-
-        // Step 1: Perplexity Research
-        res.write(
-          `data: ${JSON.stringify({ type: "status", text: "🔍 [1/4] Perplexityで深くリサーチ中..." })}\n\n`,
-        );
-        let searchResult = "検索結果なし";
-        const timeoutMs = 7000; // 7 seconds timeout to avoid Vercel 10s function limit
-
-        const fetchSearchWithTimeout = async (query) => {
-          const createTimeout = () =>
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("TIMEOUT")), timeoutMs),
-            );
-          try {
-            return await Promise.race([
-              executeHighPrecisionSearch(query),
-              createTimeout(),
-            ]);
-          } catch (e) {
-            console.warn(
-              "[Deep Research] Perplexity failed/timeout:",
-              e.message,
-            );
-            res.write(
-              `data: ${JSON.stringify({ type: "status", text: "⚠️ Perplexityがタイムアウト/エラーのため、標準検索に切り替えます..." })}\n\n`,
-            );
-            try {
-              return await Promise.race([
-                executeStandardSearch(query),
-                createTimeout(),
-              ]);
-            } catch (e2) {
-              console.warn(
-                "[Deep Research] Standard search failed/timeout:",
-                e2.message,
-              );
-              try {
-                return await Promise.race([
-                  executeEcoSearch(query, req.body.tavilyApiKey),
-                  createTimeout(),
-                ]);
-              } catch (e3) {
-                console.warn(
-                  "[Deep Research] All searches failed/timeout:",
-                  e3.message,
-                );
-                return "【システム通知】※ディープリサーチのWeb検索処理がタイムアウトまたはエラーにより失敗しました。リアルタイムの検索結果は得られていません。";
-              }
-            }
-          }
-        };
-
-        searchResult = await fetchSearchWithTimeout(lastUserMsg);
-
-        // Step 2: Claude Draft
-        res.write(
-          `data: ${JSON.stringify({ type: "status", text: "✍️ [2/4] Claudeで初期考察(Draft)を作成中..." })}\n\n`,
-        );
-        const draftPrompt = `
-ユーザーからの質問：
-${lastUserMsg}
-
-Perplexityによるリサーチ結果：
-${searchResult}
-
-上記のリサーチ結果をもとに、ユーザーの質問に対する詳細な「初期考察」を作成してください。
-`;
-        const draftMessage = await anthropic.messages.create({
-          model: "claude-sonnet-4-5-20250929",
-          max_tokens: 3000,
-          messages: [{ role: "user", content: draftPrompt }],
-          system:
-            "あなたは優秀なリサーチャーです。事実に基づいた詳細な初期考察を作成してください。",
-        });
-        const initialDraft =
-          draftMessage.content[0].type === "text"
-            ? draftMessage.content[0].text
-            : "";
-
-        // Step 3: Gemini Critique
-        res.write(
-          `data: ${JSON.stringify({ type: "status", text: "🕵️ [3/4] Geminiで推敲・批判レビュー中..." })}\n\n`,
-        );
-        const critiquePrompt = `
-ユーザーからの質問：
-${lastUserMsg}
-
-他のAIが作成した初期考察：
-${initialDraft}
-
-あなたは非常に鋭く論理的なレビュアーです。
-この初期考察に対する「批判的意見」「見落としているかもしれない視点」「別の有力な代替案」を厳格に提示してください。
-`;
-        let critique = "レビュー結果なし（Gemini APIエラー）";
-        try {
-          const geminiApiKey =
-            process.env.AI_INTEGRATIONS_GOOGLE_API_KEY ||
-            process.env.GOOGLE_API_KEY;
-          if (geminiApiKey) {
-            const geminiRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: [{ parts: [{ text: critiquePrompt }] }],
-                  generationConfig: { maxOutputTokens: 2000 },
-                }),
-              },
-            );
-            if (geminiRes.ok) {
-              const geminiData = await geminiRes.json();
-              if (geminiData.candidates?.[0]?.content?.parts?.[0]?.text) {
-                critique = geminiData.candidates[0].content.parts[0].text;
-              }
-            } else {
-              console.warn(
-                "[Deep Research] Gemini API Error:",
-                geminiRes.status,
-              );
-            }
-          }
-        } catch (e) {
-          console.error("[Deep Research] Gemini Critique Failed:", e);
-        }
-
-        // Step 4: Claude Final Synthesis (Streamed)
-        res.write(
-          `data: ${JSON.stringify({ type: "status", text: "✨ [4/4] 最終回答を生成中..." })}\n\n`,
-        );
-        const finalPrompt = `
-ユーザーからの質問：
-${lastUserMsg}
-
-初期の考察：
-${initialDraft}
-
-レビュアーからの批判・別の視点：
-${critique}
-
-【あなたのタスク】
-上記のすべての情報を統合・昇華させ、ユーザーに対する「最終的な回答」を作成してください。
-以下のルールを厳守してください：
-- レビュアーの指摘を反映し、最も深く洗練された回答にすること。
-- 「初期考察では〜」「レビュアーの意見では〜」といった裏側の議論の経緯は一切書かないこと。
-- 余計なメタデータやJSON、挨拶などは含めず、純粋な回答テキストのみを出力すること。
-`;
-
-        const finalStream = anthropic.messages.stream({
-          model: "claude-sonnet-4-5-20250929",
-          max_tokens: 4000,
-          messages: [{ role: "user", content: finalPrompt }],
-          system:
-            userSystemInstructions ||
-            "あなたは優秀で論理的なAIアシスタントです。",
-        });
-
-        for await (const event of finalStream) {
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
-            res.write(
-              `data: ${JSON.stringify({ type: "content", text: event.delta.text })}\n\n`,
-            );
-          }
-        }
-
-        const footer = createFooter(
-          "claude-sonnet-4-5-20250929 (Deep Research)",
-          ["deep_research_orchestrator"],
-        );
-        res.write(
-          `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
-        );
-        res.write("data: [DONE]\n\n");
-        res.end();
-        return;
-      } catch (err) {
-        console.error("[Deep Research] Error:", err);
-        res.write(
-          `data: ${JSON.stringify({ type: "error", message: "Deep Research中にエラーが発生しました: " + err.message })}\n\n`,
-        );
-        res.end();
-        return;
-      }
-    }
-    // --- END DEEP RESEARCH ORCHESTRATOR FLOW ---
 
     // --- Search Routing System Prompt Injection ---
     let injectedResults = "";
@@ -1087,10 +889,7 @@ ${critique}
     // Combine instructions: Search Instructions FIRST, User Instructions LAST (for priority)
     let systemInstructions = searchInstructions;
 
-    // --- SPECIAL HANDLING FOR USER INSTRUCTIONS ---
-    // If user provided specific role/instructions, we MUST respect them above all else.
-    // We do NOT prepend "You are a writing assistant" if the user has their own persona.
-
+    // --- SPECIAL HANDLING FOR USER INSTRUCTIONS AND CONSENSUS PROMPT ---
     if (userSystemInstructions) {
       if (systemInstructions) systemInstructions += "\n\n---\n\n";
       systemInstructions += userSystemInstructions;
@@ -1099,6 +898,10 @@ ${critique}
       if (systemInstructions) systemInstructions += "\n\n---\n\n";
       systemInstructions +=
         "You are a helpful and conversational AI assistant.";
+    }
+
+    if (consensusPrompt) {
+      systemInstructions += consensusPrompt;
     }
 
     // --- CRITICAL CONSTRAINTS (Absolute Enforcement) ---

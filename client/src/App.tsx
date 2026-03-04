@@ -131,10 +131,6 @@ function ChatApp() {
     "",
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(true); // Default open or closed? Maybe true if user is confused it's gone.
-  const [isDeepResearch, setIsDeepResearch] = useLocalStorage<boolean>(
-    "chat-is-deep-research",
-    false,
-  );
 
   // Fix legacy model IDs and temperature
   useEffect(() => {
@@ -336,7 +332,6 @@ function ChatApp() {
           topP,
           systemInstructions,
           searchMode,
-          isDeepResearch,
         }),
       });
 
@@ -490,8 +485,6 @@ function ChatApp() {
         }
         onStopGeneration={handleStopGeneration}
         isGenerating={isGenerating}
-        isDeepResearch={isDeepResearch}
-        onDeepResearchChange={setIsDeepResearch}
       />
 
       {/* Right Settings Panel */}
