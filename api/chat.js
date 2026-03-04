@@ -848,22 +848,53 @@ export default async function handler(req, res) {
           `data: ${JSON.stringify({ type: "status", text: "🔍 [1/4] Perplexityで深くリサーチ中..." })}\n\n`,
         );
         let searchResult = "検索結果なし";
-        try {
-          searchResult = await executeHighPrecisionSearch(lastUserMsg);
-        } catch (e) {
-          console.warn("[Deep Research] Perplexity failed:", e.message);
-          res.write(
-            `data: ${JSON.stringify({ type: "status", text: "⚠️ Perplexityが利用できないため、標準検索に切り替えます..." })}\n\n`,
-          );
-          try {
-            searchResult = await executeStandardSearch(lastUserMsg);
-          } catch (e2) {
-            searchResult = await executeEcoSearch(
-              lastUserMsg,
-              req.body.tavilyApiKey,
+        const timeoutMs = 7000; // 7 seconds timeout to avoid Vercel 10s function limit
+
+        const fetchSearchWithTimeout = async (query) => {
+          const createTimeout = () =>
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("TIMEOUT")), timeoutMs),
             );
+          try {
+            return await Promise.race([
+              executeHighPrecisionSearch(query),
+              createTimeout(),
+            ]);
+          } catch (e) {
+            console.warn(
+              "[Deep Research] Perplexity failed/timeout:",
+              e.message,
+            );
+            res.write(
+              `data: ${JSON.stringify({ type: "status", text: "⚠️ Perplexityがタイムアウト/エラーのため、標準検索に切り替えます..." })}\n\n`,
+            );
+            try {
+              return await Promise.race([
+                executeStandardSearch(query),
+                createTimeout(),
+              ]);
+            } catch (e2) {
+              console.warn(
+                "[Deep Research] Standard search failed/timeout:",
+                e2.message,
+              );
+              try {
+                return await Promise.race([
+                  executeEcoSearch(query, req.body.tavilyApiKey),
+                  createTimeout(),
+                ]);
+              } catch (e3) {
+                console.warn(
+                  "[Deep Research] All searches failed/timeout:",
+                  e3.message,
+                );
+                return "【システム通知】※ディープリサーチのWeb検索処理がタイムアウトまたはエラーにより失敗しました。リアルタイムの検索結果は得られていません。";
+              }
+            }
           }
-        }
+        };
+
+        searchResult = await fetchSearchWithTimeout(lastUserMsg);
 
         // Step 2: Claude Draft
         res.write(
