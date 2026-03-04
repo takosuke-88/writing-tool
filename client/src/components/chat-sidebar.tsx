@@ -109,11 +109,9 @@ function ConversationItem({
               <Button
                 variant="ghost"
                 size="icon"
+                style={{ opacity: isHovered || dropdownOpen ? 1 : 0 }}
                 className={cn(
                   "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
-                  isHovered || dropdownOpen
-                    ? "opacity-100"
-                    : "opacity-0 md:opacity-0",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
