@@ -500,12 +500,64 @@ async function streamPerplexity(
         top_p: appliedTopP,
       }),
     });
-    // ... (rest of function)
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`Perplexity API Error: ${response.status} ${errText}`);
+      if (response.status === 429 || response.status === 402) {
+        throw new Error("PERPLEXITY_QUOTA_EXCEEDED");
+      }
+      throw new Error(`Perplexity API Error: ${response.status}`);
+    }
 
-    // ... (skipping unchanged code) ...
+    if (!response.body) {
+      throw new Error("No response body from Perplexity");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      done = readerDone;
+
+      if (value) {
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.trim().startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+
+            try {
+              const data = JSON.parse(dataStr);
+              const text = data.choices?.[0]?.delta?.content;
+
+              if (text) {
+                res.write(
+                  `data: ${JSON.stringify({ type: "content", text })}\n\n`,
+                );
+              }
+
+              // Track usage if available
+              if (data.usage) {
+                await logApiUsage(
+                  "perplexity",
+                  model,
+                  data.usage.prompt_tokens || 0,
+                  data.usage.completion_tokens || 0,
+                );
+              }
+            } catch (e) {
+              // Ignore parse errors for partial chunks
+            }
+          }
+        }
+      }
+    }
 
     // Append Footer
-    // Debug Info Removed
     const footer = createFooter(model, ["Perplexity (Native)"]);
     res.write(`data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`);
 

@@ -879,6 +879,7 @@ export async function registerRoutes(
       const forceSearch = searchMode && searchMode !== "auto";
       let injectedResults = "";
       let searchInstructions = "";
+      let detectedSearchTool: string | undefined = undefined;
 
       // Debug logging for search flow
       console.log("[SearchDebug] searchMode:", JSON.stringify(searchMode));
@@ -896,6 +897,7 @@ export async function registerRoutes(
             String(lastUser.content),
             tavilyApiKey,
           );
+          detectedSearchTool = "eco_search";
           console.log(
             "[AutoSearch] SUCCESS, results length:",
             injectedResults.length,
@@ -1018,14 +1020,17 @@ export async function registerRoutes(
               String(lastUser.content),
               tavilyApiKey,
             );
+            detectedSearchTool = "eco_search";
           } else if (searchMode === "high_precision") {
             injectedResults = await execHighPrecisionSearch(
               String(lastUser.content),
             );
+            detectedSearchTool = "high_precision_search";
           } else if (searchMode === "standard") {
             injectedResults = await execStandardSearch(
               String(lastUser.content),
             );
+            detectedSearchTool = "standard_search";
           }
         } catch (e: any) {
           injectedResults = `(検索失敗: ${e?.message || "unknown"})`;
@@ -1176,7 +1181,7 @@ export async function registerRoutes(
             `data: ${JSON.stringify({ type: "content", text: cleaned })}\n\n`,
           );
         }
-        const footer = createFooter(model, searchMode);
+        const footer = createFooter(model, searchMode, detectedSearchTool);
         res.write(
           `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
         );
@@ -1255,7 +1260,7 @@ export async function registerRoutes(
             })}\n\n`,
           );
         }
-        const footer = createFooter(model, searchMode);
+        const footer = createFooter(model, searchMode, detectedSearchTool);
         res.write(
           `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
         );
@@ -1475,7 +1480,11 @@ export async function registerRoutes(
           }
         }
 
-        const footer = createFooter(model, searchMode);
+        const footer = createFooter(
+          model,
+          searchMode,
+          tagDetected?.tool || detectedSearchTool,
+        );
         res.write(
           `data: ${JSON.stringify({ type: "footer", text: footer })}\n\n`,
         );

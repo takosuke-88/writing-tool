@@ -106,7 +106,12 @@ function ConversationItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-[#5f6368] opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 hover:bg-[#e8f0fe] transition-opacity"
+                className={cn(
+                  "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
+                  dropdownOpen
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100",
+                )}
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
