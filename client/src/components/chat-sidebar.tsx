@@ -49,7 +49,6 @@ function ConversationItem({
   onFinishEditing: (id: number, title: string) => void;
   onDelete: (id: number) => void;
 }) {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const isEditing = editingId === conversation.id;
 
   const formatDate = (date: Date) => {
@@ -101,16 +100,14 @@ function ConversationItem({
 
       {!isEditing && (
         <div className="flex-shrink-0">
-          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 className={cn(
                   "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
-                  dropdownOpen
-                    ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100",
+                  "opacity-100 md:opacity-0 md:group-hover:opacity-100 data-[state=open]:opacity-100",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -121,7 +118,6 @@ function ConversationItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  setDropdownOpen(false);
                   // Wait for dropdown to fully close before entering edit mode
                   setTimeout(() => {
                     onStartEditing(conversation.id, conversation.title);
@@ -135,7 +131,6 @@ function ConversationItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  setDropdownOpen(false);
                   onDelete(conversation.id);
                 }}
                 className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
