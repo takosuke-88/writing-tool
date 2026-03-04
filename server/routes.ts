@@ -826,7 +826,7 @@ export async function registerRoutes(
           const draftPrompt = `ユーザーからの質問：\n${lastUserMsg}\n\nPerplexityによるリサーチ結果：\n${searchResult}\n\n上記のリサーチ結果をもとに、ユーザーの質問に対する詳細な「初期考察」を作成してください。`;
 
           const draftMessage = await anthropic.messages.create({
-            model: "claude-3-5-sonnet-20241022",
+            model: DEFAULT_MODEL,
             max_tokens: 3000,
             messages: [{ role: "user", content: draftPrompt }],
             system:
@@ -878,7 +878,7 @@ export async function registerRoutes(
           const finalPrompt = `ユーザーからの質問：\n${lastUserMsg}\n\n初期の考察：\n${initialDraft}\n\nレビュアーからの批判・別の視点：\n${critique}\n\n【あなたのタスク】\n上記のすべての情報を統合・昇華させ、ユーザーに対する「最終的な回答」を作成してください。\n以下のルールを厳守してください：\n- レビュアーの指摘を反映し、最も深く洗練された回答にすること。\n- 「初期考察では〜」「レビュアーの意見では〜」といった裏側の議論の経緯は一切書かないこと。\n- 余計なメタデータやJSON、挨拶などは含めず、純粋な回答テキストのみを出力すること。`;
 
           const finalStream = anthropic.messages.stream({
-            model: "claude-3-5-sonnet-20241022",
+            model: DEFAULT_MODEL,
             max_tokens: 4000,
             messages: [{ role: "user", content: finalPrompt }],
             system:
@@ -898,7 +898,7 @@ export async function registerRoutes(
           }
 
           const footer = createFooter(
-            "claude-3-5-sonnet-20241022 (Deep Research)",
+            `${DEFAULT_MODEL} (Deep Research)`,
             undefined,
             "deep_research_orchestrator",
           );
