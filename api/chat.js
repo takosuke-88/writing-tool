@@ -821,8 +821,21 @@ export default async function handler(req, res) {
       isDeepResearch = false,
     } = req.body;
 
+    // Auto Model Route and Deep Research automatic trigger
+    const isAutoModel = !requestedModel || requestedModel === "auto";
+    const lastUserMsgText = messages[messages.length - 1]?.content || "";
+    const complexityStr = analyzeComplexity(lastUserMsgText);
+
+    let effectivelyDeepResearch = isDeepResearch;
+    if (isAutoModel && complexityStr === "complex" && !isDeepResearch) {
+      console.log(
+        "[Auto Routing] Complex query detected. Outputting via Deep Research.",
+      );
+      effectivelyDeepResearch = true;
+    }
+
     // --- DEEP RESEARCH ORCHESTRATOR FLOW ---
-    if (isDeepResearch) {
+    if (effectivelyDeepResearch) {
       console.log("[Deep Research] Orchestration flow started");
 
       try {
@@ -866,7 +879,7 @@ ${searchResult}
 上記のリサーチ結果をもとに、ユーザーの質問に対する詳細な「初期考察」を作成してください。
 `;
         const draftMessage = await anthropic.messages.create({
-          model: "claude-3-5-sonnet-20241022",
+          model: "claude-sonnet-4-5-20250929",
           max_tokens: 3000,
           messages: [{ role: "user", content: draftPrompt }],
           system:
@@ -947,7 +960,7 @@ ${critique}
 `;
 
         const finalStream = anthropic.messages.stream({
-          model: "claude-3-5-sonnet-20241022",
+          model: "claude-sonnet-4-5-20250929",
           max_tokens: 4000,
           messages: [{ role: "user", content: finalPrompt }],
           system:
@@ -967,7 +980,7 @@ ${critique}
         }
 
         const footer = createFooter(
-          "claude-3-5-sonnet-20241022 (Deep Research)",
+          "claude-sonnet-4-5-20250929 (Deep Research)",
           ["deep_research_orchestrator"],
         );
         res.write(
@@ -988,6 +1001,27 @@ ${critique}
     // --- END DEEP RESEARCH ORCHESTRATOR FLOW ---
 
     // --- Search Routing System Prompt Injection ---
+    let injectedResults = "";
+    let detectedSearchTool = undefined;
+
+    // Auto mode: ALWAYS trigger eco search for every query to ensure real-time info is available
+    if (searchMode === "auto") {
+      const autoQueryStr = messages[messages.length - 1]?.content || "";
+      if (autoQueryStr) {
+        console.log("[AutoSearch] TRIGGERING eco search...");
+        try {
+          injectedResults = await executeEcoSearch(
+            autoQueryStr,
+            req.body.tavilyApiKey,
+          );
+          detectedSearchTool = "eco_search";
+          console.log("[AutoSearch] SUCCESS");
+        } catch (e) {
+          console.error("[AutoSearch] FAILED:", e.message);
+          injectedResults = ""; // Fallback graceful
+        }
+      }
+    }
     // --- Search Routing System Prompt Injection ---
     let searchInstructions = "";
     let effectiveTools = TOOLS;
@@ -1094,9 +1128,12 @@ ${critique}
     const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\nあなたが受け取っているプロンプトには、システムが自動で検索した最新の「検索結果」が既に含まれている場合があります。\nユーザーから「今検索した？」のように聞かれた場合、「自ら検索ツールを使っていない」という理由だけで「適当に答えてしまった」「検索していなかった」と謝罪するのは**絶対にやめてください**。\nシステムから提供された検索結果をもとに回答した場合は堂々とその旨を伝え、不要な謝罪は避けてください。\n\nまた、検索結果に引きずられず、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n\n【禁止事項】\n・ユーザーの質問を復唱しない。\n・「〜を聞いてくれてありがとう」等の感謝の挨拶は禁止。いきなり本題の回答から始める。\n・検索ツールを自分で呼ばなかったことを理由に謝罪しない。\n---`;
 
     // Append to the last user message in the messages array
-    // We reverse loop to find the last user message
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") {
+        if (injectedResults) {
+          messages[i].content +=
+            `\n\n【自動取得された検索結果（参考にして回答してください）】\n${injectedResults}`;
+        }
         messages[i].content += SYSTEM_REMINDER;
         break;
       }
