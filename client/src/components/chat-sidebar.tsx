@@ -115,9 +115,10 @@ function ConversationItem({
                 size="icon"
                 className={cn(
                   "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
+                  "opacity-100", // モバイル（ベース）は常に100%
                   isHovered || dropdownOpen
-                    ? "opacity-100"
-                    : "opacity-100 md:opacity-0", // モバイルは常に表示、PCはホバー時のみ
+                    ? "md:opacity-100" // PC環境かつホバー時・メニュー開閉時は100%を表示
+                    : "md:opacity-0", // PC環境で非ホバー時は確実に0%にする
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
