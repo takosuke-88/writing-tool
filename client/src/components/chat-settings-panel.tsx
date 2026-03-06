@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface ChatSettingsPanelProps {
   model: string;
@@ -32,6 +33,7 @@ interface ChatSettingsPanelProps {
   onSearchModeChange: (mode: string) => void;
   tavilyApiKey: string;
   onTavilyApiKeyChange: (key: string) => void;
+  className?: string;
 }
 
 const MODELS = [
@@ -75,11 +77,12 @@ export function ChatSettingsPanel({
   onSearchModeChange,
   tavilyApiKey,
   onTavilyApiKeyChange,
+  className,
 }: ChatSettingsPanelProps) {
   const selectedModel = MODELS.find((m) => m.id === model);
 
   return (
-    <div className="w-[320px] h-full bg-[#f8f9fa] border-l border-[#dadce0] flex flex-col">
+    <div className={cn("w-[320px] h-full bg-[#f8f9fa] border-l border-[#dadce0] flex flex-col", className)}>
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
           {/* Model Selection */}

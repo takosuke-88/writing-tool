@@ -29,6 +29,7 @@ interface ChatSidebarProps {
   onDeleteConversation: (id: number) => void;
   onUpdateTitle: (id: number, title: string) => void;
   onToggleSettings: () => void;
+  className?: string;
 }
 
 // Extracted ConversationItem component to properly scope state per item
@@ -226,6 +227,7 @@ export function ChatSidebar({
   onDeleteConversation,
   onUpdateTitle,
   onToggleSettings,
+  className,
 }: ChatSidebarProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -244,7 +246,7 @@ export function ChatSidebar({
   );
 
   return (
-    <div className="w-[280px] h-full bg-white border-r border-[#dadce0] flex flex-col">
+    <div className={cn("w-[280px] h-full bg-white border-r border-[#dadce0] flex flex-col", className)}>
       {/* Header */}
       <div className="flex-shrink-0 p-3 border-b border-[#dadce0]">
         <div className="flex items-center gap-2 mb-3">

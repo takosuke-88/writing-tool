@@ -52,6 +52,10 @@ function useLocalStorage<T>(
   return [storedValue, setStoredValue];
 }
 
+import { Menu, Settings as SettingsIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+
 function ChatApp() {
   const { toast } = useToast();
 
@@ -62,6 +66,10 @@ function ChatApp() {
   >(null);
   const [messages, setMessages] = useState<Record<number, Message[]>>({});
   const [isLoading, setIsLoading] = useState(true);
+
+  // Mobile Drawer States
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
 
   // Fetch initial data
   useEffect(() => {
@@ -130,7 +138,7 @@ function ChatApp() {
     "chat-tavily-api-key",
     "",
   );
-  const [isSettingsOpen, setIsSettingsOpen] = useState(true); // Default open or closed? Maybe true if user is confused it's gone.
+  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
 
   // Fix legacy model IDs and temperature
   useEffect(() => {
@@ -157,7 +165,7 @@ function ChatApp() {
         description: "INVALID ID → claude-sonnet-4-5",
       });
     }
-  }, [model, temperature]); // Run when model/temp changes (or on mount)
+  }, [model, temperature]);
 
   // Handlers
   const handleNewConversation = async () => {
@@ -177,6 +185,7 @@ function ChatApp() {
       setConversations([newConv, ...conversations]);
       setMessages((prev) => ({ ...prev, [newConv.id]: [] }));
       setSelectedConversationId(newConv.id);
+      setIsMobileSidebarOpen(false); // Close sidebar on mobile
       toast({ title: "新しい会話を作成しました" });
     } catch (err) {
       console.error(err);
@@ -197,6 +206,7 @@ function ChatApp() {
     if (!messages[conversation.id]) {
       fetchMessages(conversation.id);
     }
+    setIsMobileSidebarOpen(false); // Close sidebar on mobile
   };
 
   const handleDeleteConversation = async (id: number) => {
@@ -306,8 +316,6 @@ function ChatApp() {
 
     try {
       const history = messages[selectedConversationId] || [];
-      // Filter out messages with empty content to prevent 400 errors from previous failed generations
-      // Also strip footer/signature patterns from message history to prevent AI echo loop
       const stripFooter = (text: string) => {
         return text
           .replace(/\n\n---\n(Search Model:[^\n]*\n\n?)?(Model:[^\n]*)?$/, "")
@@ -361,7 +369,6 @@ function ChatApp() {
                 const data = JSON.parse(dataStr);
                 if (data.type === "content") {
                   fullText += data.text;
-                  // Update UI
                   setMessages((prev) => {
                     const msgs = prev[selectedConversationId] || [];
                     return {
@@ -372,8 +379,6 @@ function ChatApp() {
                     };
                   });
                 } else if (data.type === "footer") {
-                  // Footer is displayed but stored separately from the main content
-                  // so it doesn't get sent back as history to the AI
                   fullText += data.text;
                   setMessages((prev) => {
                     const msgs = prev[selectedConversationId] || [];
@@ -433,7 +438,6 @@ function ChatApp() {
         }
       }
     } catch (error) {
-      // Syntax error fixed
       console.error("Chat error:", error);
       toast({
         title: "エラーが発生しました",
@@ -461,52 +465,125 @@ function ChatApp() {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-white">
-      {/* Left Sidebar */}
-      <ChatSidebar
-        conversations={conversations}
-        selectedConversationId={selectedConversationId}
-        onSelectConversation={handleSelectConversation}
-        onNewConversation={handleNewConversation}
-        onDeleteConversation={handleDeleteConversation}
-        onUpdateTitle={handleUpdateTitle}
-        onToggleSettings={() => setIsSettingsOpen((prev: boolean) => !prev)}
-      />
+    <div className="flex flex-col md:flex-row h-screen w-full bg-white overflow-hidden">
+      {/* Mobile Top Header - Visible only on md and down */}
+      <div className="md:hidden flex-shrink-0 flex items-center justify-between border-b border-[#dadce0] px-4 h-14 bg-white z-10">
+        <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-[#5f6368] hover:bg-[#f1f3f4]"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-[280px]">
+             <ChatSidebar
+              conversations={conversations}
+              selectedConversationId={selectedConversationId}
+              onSelectConversation={handleSelectConversation}
+              onNewConversation={handleNewConversation}
+              onDeleteConversation={handleDeleteConversation}
+              onUpdateTitle={handleUpdateTitle}
+              onToggleSettings={() => {
+                setIsMobileSidebarOpen(false);
+                setIsMobileSettingsOpen(true);
+              }}
+              className="w-full border-r-0"
+            />
+          </SheetContent>
+        </Sheet>
 
-      {/* Main Chat Area */}
-      <ChatArea
-        conversationId={selectedConversationId}
-        title={currentConversation?.title || "新しい会話"}
-        messages={currentMessages}
-        onSendMessage={handleSendMessage}
-        onUpdateTitle={(title) =>
-          selectedConversationId &&
-          handleUpdateTitle(selectedConversationId, title)
-        }
-        onStopGeneration={handleStopGeneration}
-        isGenerating={isGenerating}
-      />
+        <h1 className="text-base font-medium text-[#202124] truncate flex-1 text-center px-4">
+          {currentConversation?.title || "新しい会話"}
+        </h1>
 
-      {/* Right Settings Panel */}
-      {isSettingsOpen && (
-        <ChatSettingsPanel
-          model={model}
-          temperature={temperature}
-          maxTokens={maxTokens}
-          topP={topP}
-          systemInstructions={systemInstructions}
-          isSystemInstructionsOpen={isSystemInstructionsOpen}
-          onModelChange={setModel}
-          onTemperatureChange={setTemperature}
-          onMaxTokensChange={setMaxTokens}
-          onTopPChange={setTopP}
-          onSystemInstructionsChange={setSystemInstructions}
-          onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
-          searchMode={searchMode}
-          onSearchModeChange={setSearchMode}
-          tavilyApiKey={tavilyApiKey}
-          onTavilyApiKeyChange={setTavilyApiKey}
+        <Sheet open={isMobileSettingsOpen} onOpenChange={setIsMobileSettingsOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-[#5f6368] hover:bg-[#f1f3f4]"
+            >
+              <SettingsIcon className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="p-0 w-[300px] sm:w-[350px]">
+             <ChatSettingsPanel
+              model={model}
+              temperature={temperature}
+              maxTokens={maxTokens}
+              topP={topP}
+              systemInstructions={systemInstructions}
+              isSystemInstructionsOpen={isSystemInstructionsOpen}
+              onModelChange={setModel}
+              onTemperatureChange={setTemperature}
+              onMaxTokensChange={setMaxTokens}
+              onTopPChange={setTopP}
+              onSystemInstructionsChange={setSystemInstructions}
+              onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
+              searchMode={searchMode}
+              onSearchModeChange={setSearchMode}
+              tavilyApiKey={tavilyApiKey}
+              onTavilyApiKeyChange={setTavilyApiKey}
+              className="w-full border-l-0"
+            />
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* PC Left Sidebar - Hidden on mobile */}
+      <div className="hidden md:block h-full">
+        <ChatSidebar
+          conversations={conversations}
+          selectedConversationId={selectedConversationId}
+          onSelectConversation={handleSelectConversation}
+          onNewConversation={handleNewConversation}
+          onDeleteConversation={handleDeleteConversation}
+          onUpdateTitle={handleUpdateTitle}
+          onToggleSettings={() => setIsSettingsOpen((prev) => !prev)}
         />
+      </div>
+
+      {/* Main Chat Area - Expands to full width */}
+      <div className="flex-1 w-full h-full flex flex-col min-w-0">
+        <ChatArea
+          conversationId={selectedConversationId}
+          title={currentConversation?.title || "新しい会話"}
+          messages={currentMessages}
+          onSendMessage={handleSendMessage}
+          onUpdateTitle={(title) =>
+            selectedConversationId &&
+            handleUpdateTitle(selectedConversationId, title)
+          }
+          onStopGeneration={handleStopGeneration}
+          isGenerating={isGenerating}
+        />
+      </div>
+
+      {/* PC Right Settings Panel - Hidden on mobile */}
+      {isSettingsOpen && (
+        <div className="hidden md:block h-full">
+          <ChatSettingsPanel
+            model={model}
+            temperature={temperature}
+            maxTokens={maxTokens}
+            topP={topP}
+            systemInstructions={systemInstructions}
+            isSystemInstructionsOpen={isSystemInstructionsOpen}
+            onModelChange={setModel}
+            onTemperatureChange={setTemperature}
+            onMaxTokensChange={setMaxTokens}
+            onTopPChange={setTopP}
+            onSystemInstructionsChange={setSystemInstructions}
+            onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
+            searchMode={searchMode}
+            onSearchModeChange={setSearchMode}
+            tavilyApiKey={tavilyApiKey}
+            onTavilyApiKeyChange={setTavilyApiKey}
+          />
+        </div>
       )}
     </div>
   );
