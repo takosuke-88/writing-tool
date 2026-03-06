@@ -361,24 +361,3 @@
     inset: -1px;
   }
 }
-
-/* ホバーメニューボタン専用CSS */
-.more-menu-btn {
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-
-@media (min-width: 768px) {
-  .more-menu-btn.hide-on-pc {
-    opacity: 0 !important;
-    pointer-events: none;
-  }
-
-  /* 親行をホバーしている時は hide-on-pc でも表示する */
-  /* .group は Tailwind の仕様に基づく親クラスからのホバー適用用、div:hover>div>... は DOM 構造ベースのより強固なセレクタ */
-  div:hover > div > .more-menu-btn.hide-on-pc,
-  .group:hover .more-menu-btn.hide-on-pc {
-    opacity: 1 !important;
-    pointer-events: auto;
-  }
-}

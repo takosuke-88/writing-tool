@@ -112,8 +112,9 @@ function ConversationItem({
                 size="icon"
                 className={cn(
                   "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
-                  "more-menu-btn",
-                  !dropdownOpen && "hide-on-pc",
+                  // PC environments (md and above): hide by default, show on parent group hover or when dropdown is open
+                  "md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto",
+                  dropdownOpen && "md:opacity-100 md:pointer-events-auto",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
