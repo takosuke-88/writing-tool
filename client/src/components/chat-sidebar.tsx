@@ -49,7 +49,6 @@ function ConversationItem({
   onFinishEditing: (id: number, title: string) => void;
   onDelete: (id: number) => void;
 }) {
-  const [isHovered, setIsHovered] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isEditing = editingId === conversation.id;
 
@@ -71,11 +70,9 @@ function ConversationItem({
   return (
     <div
       className={cn(
-        "relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
+        "group relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
         isSelected ? "bg-[#e8f0fe]" : "hover:bg-[#f1f3f4]",
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onClick={() => {
         if (!isEditing) onSelect();
       }}
@@ -104,24 +101,32 @@ function ConversationItem({
 
       {!isEditing && (
         <div className="flex-shrink-0">
-          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenu
+            open={dropdownOpen}
+            onOpenChange={setDropdownOpen}
+            modal={false}
+          >
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                style={{ opacity: isHovered || dropdownOpen ? 1 : 0 }}
                 className={cn(
                   "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
+                  "opacity-100 md:opacity-0 md:group-hover:opacity-100 data-[state=open]:opacity-100",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuContent
+              align="end"
+              className="w-36"
+              onClick={(e) => e.stopPropagation()}
+            >
               <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
+                onSelect={(e) => {
+                  e.preventDefault();
                   setDropdownOpen(false);
                   setTimeout(() => {
                     onStartEditing(conversation.id, conversation.title);
@@ -133,8 +138,8 @@ function ConversationItem({
                 <span>名前変更</span>
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
+                onSelect={(e) => {
+                  e.preventDefault();
                   setDropdownOpen(false);
                   onDelete(conversation.id);
                 }}
