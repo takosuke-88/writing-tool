@@ -465,7 +465,7 @@ function ChatApp() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-white overflow-hidden">
+    <div className="flex flex-col md:flex-row h-[100dvh] w-full bg-white overflow-hidden">
       {/* Mobile Top Header - Visible only on md and down */}
       <div className="md:hidden flex-shrink-0 flex items-center justify-between border-b border-[#dadce0] px-4 h-14 bg-white z-10">
         <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>

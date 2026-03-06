@@ -79,7 +79,7 @@ export function MessageBubble({
             </span>
           </div>
 
-          <div className="prose prose-sm max-w-none text-[#202124]">
+          <div className="prose text-base md:prose-sm max-w-none text-[#202124]">
             {isLoading && !content ? (
               <div className="flex items-center gap-2 text-[#5f6368] py-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -95,14 +95,14 @@ export function MessageBubble({
                         style={vscDarkPlus as any}
                         language={match[1]}
                         PreTag="div"
-                        className="rounded-lg"
+                        className="rounded-lg text-sm md:text-xs"
                         {...props}
                       >
                         {String(children).replace(/\n$/, "")}
                       </SyntaxHighlighter>
                     ) : (
                       <code
-                        className="bg-[#f1f3f4] px-1.5 py-0.5 rounded text-sm"
+                        className="bg-[#f1f3f4] px-1.5 py-0.5 rounded text-base md:text-sm"
                         {...props}
                       >
                         {children}
@@ -118,21 +118,21 @@ export function MessageBubble({
                   },
                   h1({ children }) {
                     return (
-                      <h1 className="text-2xl font-semibold text-[#202124] mt-6 mb-4">
+                      <h1 className="text-3xl md:text-2xl font-semibold text-[#202124] mt-6 mb-4">
                         {children}
                       </h1>
                     );
                   },
                   h2({ children }) {
                     return (
-                      <h2 className="text-xl font-semibold text-[#202124] mt-5 mb-3">
+                      <h2 className="text-2xl md:text-xl font-semibold text-[#202124] mt-5 mb-3">
                         {children}
                       </h2>
                     );
                   },
                   h3({ children }) {
                     return (
-                      <h3 className="text-lg font-semibold text-[#202124] mt-4 mb-2">
+                      <h3 className="text-xl md:text-lg font-semibold text-[#202124] mt-4 mb-2">
                         {children}
                       </h3>
                     );
