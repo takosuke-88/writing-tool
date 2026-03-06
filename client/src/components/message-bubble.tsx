@@ -49,21 +49,21 @@ export function MessageBubble({
   }
 
   return (
-    <div className="px-6 py-6 hover:bg-[#f8f9fa] transition-colors">
+    <div className="px-6 py-6 hover:bg-muted/50 transition-colors">
       <div className="flex gap-4">
         {/* Avatar */}
         <div className="flex-shrink-0">
           <div
             className={
               isUser
-                ? "w-8 h-8 rounded-full bg-[#1a73e8] flex items-center justify-center"
-                : "w-8 h-8 rounded-full bg-[#f1f3f4] flex items-center justify-center"
+                ? "w-8 h-8 rounded-full bg-primary flex items-center justify-center"
+                : "w-8 h-8 rounded-full bg-muted flex items-center justify-center"
             }
           >
             {isUser ? (
-              <User className="h-4 w-4 text-white" />
+              <User className="h-4 w-4 text-primary-foreground" />
             ) : (
-              <Bot className="h-4 w-4 text-[#5f6368]" />
+              <Bot className="h-4 w-4 text-muted-foreground" />
             )}
           </div>
         </div>
@@ -71,17 +71,17 @@ export function MessageBubble({
         {/* Content */}
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[#202124]">
+            <span className="text-sm font-medium text-foreground">
               {isUser ? "あなた" : "AI"}
             </span>
-            <span className="text-xs text-[#5f6368]">
+            <span className="text-xs text-muted-foreground">
               {formatTime(createdAt)}
             </span>
           </div>
 
-          <div className="prose text-base md:prose-sm max-w-none text-[#202124]">
+          <div className="prose text-base md:prose-sm max-w-none text-foreground">
             {isLoading && !content ? (
-              <div className="flex items-center gap-2 text-[#5f6368] py-2">
+              <div className="flex items-center gap-2 text-muted-foreground py-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>執筆中...</span>
               </div>
@@ -102,7 +102,7 @@ export function MessageBubble({
                       </SyntaxHighlighter>
                     ) : (
                       <code
-                        className="bg-[#f1f3f4] px-1.5 py-0.5 rounded text-base md:text-sm"
+                        className="bg-muted px-1.5 py-0.5 rounded text-base md:text-sm"
                         {...props}
                       >
                         {children}
@@ -111,49 +111,49 @@ export function MessageBubble({
                   },
                   p({ children }) {
                     return (
-                      <p className="text-[#202124] leading-relaxed mb-4 last:mb-0">
+                      <p className="text-foreground leading-relaxed mb-4 last:mb-0">
                         {children}
                       </p>
                     );
                   },
                   h1({ children }) {
                     return (
-                      <h1 className="text-3xl md:text-2xl font-semibold text-[#202124] mt-6 mb-4">
+                      <h1 className="text-3xl md:text-2xl font-semibold text-foreground mt-6 mb-4">
                         {children}
                       </h1>
                     );
                   },
                   h2({ children }) {
                     return (
-                      <h2 className="text-2xl md:text-xl font-semibold text-[#202124] mt-5 mb-3">
+                      <h2 className="text-2xl md:text-xl font-semibold text-foreground mt-5 mb-3">
                         {children}
                       </h2>
                     );
                   },
                   h3({ children }) {
                     return (
-                      <h3 className="text-xl md:text-lg font-semibold text-[#202124] mt-4 mb-2">
+                      <h3 className="text-xl md:text-lg font-semibold text-foreground mt-4 mb-2">
                         {children}
                       </h3>
                     );
                   },
                   ul({ children }) {
                     return (
-                      <ul className="list-disc list-inside space-y-1 text-[#202124] mb-4">
+                      <ul className="list-disc list-inside space-y-1 text-foreground mb-4">
                         {children}
                       </ul>
                     );
                   },
                   ol({ children }) {
                     return (
-                      <ol className="list-decimal list-inside space-y-1 text-[#202124] mb-4">
+                      <ol className="list-decimal list-inside space-y-1 text-foreground mb-4">
                         {children}
                       </ol>
                     );
                   },
                   a({ children, href }) {
                     return (
-                      <a href={href} className="text-[#1a73e8] hover:underline">
+                      <a href={href} className="text-primary hover:underline">
                         {children}
                       </a>
                     );
@@ -166,11 +166,11 @@ export function MessageBubble({
 
             {/* Footer Badges */}
             {(searchModel || llmModel) && (
-              <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-border">
                 {searchModel && (
                   <Badge
                     variant="secondary"
-                    className="bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 text-[10px] py-0 px-2 font-normal border-blue-100"
+                    className="bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-1 text-[10px] py-0 px-2 font-normal border-primary/20"
                   >
                     <Search className="w-3 h-3" />
                     {searchModel}
@@ -179,7 +179,7 @@ export function MessageBubble({
                 {llmModel && (
                   <Badge
                     variant="outline"
-                    className="text-gray-500 flex items-center gap-1 text-[10px] py-0 px-2 font-normal"
+                    className="text-muted-foreground flex items-center gap-1 text-[10px] py-0 px-2 font-normal"
                   >
                     <Cpu className="w-3 h-3" />
                     {llmModel}

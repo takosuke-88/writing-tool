@@ -42,16 +42,16 @@ export function MessageInput({
   };
 
   return (
-    <div className="border-t border-[#dadce0] bg-white p-4">
+    <div className="border-t border-border bg-background p-4">
       <div className="max-w-3xl mx-auto">
-        <div className="relative flex items-end gap-2 bg-white border border-[#dadce0] rounded-lg p-2">
+        <div className="relative flex items-end gap-2 bg-background border border-border rounded-lg p-2">
           <Textarea
             ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="メッセージを入力してください..."
-            className="min-h-[24px] max-h-[200px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-[#202124] placeholder:text-[#5f6368] p-0"
+            className="min-h-[24px] max-h-[200px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-foreground placeholder:text-muted-foreground p-0"
             disabled={disabled || isGenerating}
             rows={1}
           />
@@ -62,7 +62,7 @@ export function MessageInput({
                 onClick={onStop}
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 flex-shrink-0 text-[#5f6368] hover:bg-[#f1f3f4]"
+                className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:bg-muted"
               >
                 <Square className="h-4 w-4" />
               </Button>
@@ -71,7 +71,7 @@ export function MessageInput({
                 onClick={handleSend}
                 disabled={!message.trim() || disabled}
                 size="icon"
-                className="h-8 w-8 flex-shrink-0 bg-[#1a73e8] hover:bg-[#1557b0] text-white disabled:bg-[#dadce0] disabled:text-[#80868b]"
+                className="h-8 w-8 flex-shrink-0 bg-primary hover:opacity-90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground"
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -79,7 +79,7 @@ export function MessageInput({
           </div>
         </div>
 
-        <p className="text-xs text-[#5f6368] mt-2 text-center">
+        <p className="text-xs text-muted-foreground mt-2 text-center">
           Enterで送信、Shift+Enterで改行
         </p>
       </div>

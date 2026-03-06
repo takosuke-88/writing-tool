@@ -72,13 +72,13 @@ function ConversationItem({
     <div
       className={cn(
         "group relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
-        isSelected ? "bg-[#e8f0fe]" : "hover:bg-[#f1f3f4]",
+        isSelected ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50",
       )}
       onClick={() => {
         if (!isEditing) onSelect();
       }}
     >
-      <MessageSquare className="h-4 w-4 text-[#5f6368] flex-shrink-0 mt-0.5" />
+      <MessageSquare className="h-4 w-4 text-sidebar-foreground/70 flex-shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
         {isEditing ? (
           <InlineEditInput
@@ -91,11 +91,11 @@ function ConversationItem({
             }}
           />
         ) : (
-          <p className="text-sm text-[#202124] truncate font-medium">
+          <p className="text-sm text-sidebar-foreground truncate font-medium">
             {conversation.title}
           </p>
         )}
-        <p className="text-xs text-[#5f6368] mt-0.5">
+        <p className="text-xs text-sidebar-foreground/70 mt-0.5">
           {formatDate(conversation.updatedAt)}
         </p>
       </div>
@@ -112,7 +112,7 @@ function ConversationItem({
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
+                  "h-7 w-7 text-sidebar-foreground/70 hover:bg-sidebar-accent transition-opacity duration-200",
                   // PC environments (md and above): hide by default, show on parent group hover or when dropdown is open
                   "md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto",
                   dropdownOpen && "md:opacity-100 md:pointer-events-auto",
@@ -214,7 +214,7 @@ function InlineEditInput({
         }
       }}
       onClick={(e) => e.stopPropagation()}
-      className="text-sm text-[#202124] font-medium bg-white border border-[#1a73e8] rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 outline-none w-full"
+      className="text-sm text-foreground font-medium bg-background border border-primary rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 outline-none w-full"
     />
   );
 }
@@ -246,23 +246,23 @@ export function ChatSidebar({
   );
 
   return (
-    <div className={cn("w-[280px] h-full bg-white border-r border-[#dadce0] flex flex-col", className)}>
+    <div className={cn("w-[280px] h-full bg-sidebar border-r border-sidebar-border flex flex-col", className)}>
       {/* Header */}
-      <div className="flex-shrink-0 p-3 border-b border-[#dadce0]">
+      <div className="flex-shrink-0 p-3 border-b border-sidebar-border">
         <div className="flex items-center gap-2 mb-3">
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 text-[#5f6368] hover:bg-[#f1f3f4]"
+            className="h-10 w-10 text-sidebar-foreground/70 hover:bg-sidebar-accent"
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <span className="text-[#202124] font-medium text-lg">チャット</span>
+          <span className="text-sidebar-foreground font-medium text-lg">チャット</span>
         </div>
 
         <Button
           onClick={onNewConversation}
-          className="w-full bg-white border border-[#dadce0] text-[#202124] hover:bg-[#f8f9fa] shadow-sm h-10"
+          className="w-full bg-background border border-border text-foreground hover:bg-muted shadow-sm h-10"
         >
           <Plus className="h-4 w-4 mr-2" />
           新しいチャット
@@ -271,7 +271,7 @@ export function ChatSidebar({
         <Link href="/dashboard">
           <Button
             variant="ghost"
-            className="w-full justify-start text-[#5f6368] hover:bg-[#f1f3f4] h-10 mt-2"
+            className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent h-10 mt-2"
           >
             <BarChart3 className="h-4 w-4 mr-2" />
             使用状況ダッシュボード
@@ -283,7 +283,7 @@ export function ChatSidebar({
       <ScrollArea className="flex-1">
         <div className="p-2">
           {conversations.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-[#5f6368]">
+            <div className="px-4 py-8 text-center text-sm text-sidebar-foreground/70">
               会話がありません
             </div>
           ) : (
@@ -304,10 +304,10 @@ export function ChatSidebar({
       </ScrollArea>
 
       {/* Bottom Settings */}
-      <div className="flex-shrink-0 p-3 border-t border-[#dadce0]">
+      <div className="flex-shrink-0 p-3 border-t border-sidebar-border">
         <Button
           variant="ghost"
-          className="w-full justify-start text-[#5f6368] hover:bg-[#f1f3f4] h-10"
+          className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent h-10"
           onClick={onToggleSettings}
         >
           <Settings className="h-4 w-4 mr-2" />

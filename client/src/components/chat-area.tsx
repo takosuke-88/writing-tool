@@ -62,9 +62,9 @@ export function ChatArea({
 
   if (!conversationId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-white p-8">
+      <div className="flex-1 flex flex-col items-center justify-center bg-background p-8">
         <div className="text-center space-y-4 max-w-md">
-          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#1a73e8] to-[#1557b0] rounded-2xl flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center">
             <svg
               className="w-8 h-8 text-white"
               fill="none"
@@ -79,10 +79,10 @@ export function ChatArea({
               />
             </svg>
           </div>
-          <h2 className="text-2xl font-medium text-[#202124]">
+          <h2 className="text-2xl font-medium text-foreground">
             新しい会話を始めましょう
           </h2>
-          <p className="text-[#5f6368]">
+          <p className="text-muted-foreground">
             左側の「新しいチャット」ボタンをクリックして、AIとの会話を開始してください。
           </p>
         </div>
@@ -91,23 +91,23 @@ export function ChatArea({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="flex-1 flex flex-col bg-background">
       {/* Title Bar */}
-      <div className="flex-shrink-0 border-b border-[#dadce0] px-6 py-4 bg-white">
+      <div className="flex-shrink-0 border-b border-border px-6 py-4 bg-background">
         {isEditingTitle ? (
           <div className="flex items-center gap-2 max-w-3xl mx-auto">
             <Input
               value={editedTitle}
               onChange={(e) => setEditedTitle(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex-1 text-lg font-medium border-[#dadce0] text-[#202124]"
+              className="flex-1 text-lg font-medium border-border text-foreground"
               autoFocus
             />
             <Button
               size="icon"
               variant="ghost"
               onClick={handleSaveTitle}
-              className="h-8 w-8 text-[#1a73e8] hover:bg-[#e8f0fe]"
+              className="h-8 w-8 text-primary hover:bg-accent"
             >
               <Check className="h-4 w-4" />
             </Button>
@@ -115,21 +115,21 @@ export function ChatArea({
               size="icon"
               variant="ghost"
               onClick={handleCancelEdit}
-              className="h-8 w-8 text-[#5f6368] hover:bg-[#f1f3f4]"
+              className="h-8 w-8 text-muted-foreground hover:bg-muted"
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
         ) : (
           <div className="flex items-center gap-2 group max-w-3xl mx-auto">
-            <h1 className="text-lg font-medium text-[#202124] flex-1">
+            <h1 className="text-lg font-medium text-foreground flex-1">
               {title}
             </h1>
             <Button
               size="icon"
               variant="ghost"
               onClick={() => setIsEditingTitle(true)}
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-[#5f6368] hover:bg-[#f1f3f4]"
+              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:bg-muted"
             >
               <Edit2 className="h-4 w-4" />
             </Button>
@@ -142,7 +142,7 @@ export function ChatArea({
         <div className="max-w-3xl mx-auto">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full p-8">
-              <p className="text-[#5f6368] text-center">
+              <p className="text-muted-foreground text-center">
                 メッセージを入力して会話を始めてください
               </p>
             </div>
