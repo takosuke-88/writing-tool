@@ -50,7 +50,6 @@ function ConversationItem({
   onDelete: (id: number) => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const isEditing = editingId === conversation.id;
 
   const formatDate = (date: Date) => {
@@ -77,8 +76,6 @@ function ConversationItem({
       onClick={() => {
         if (!isEditing) onSelect();
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       <MessageSquare className="h-4 w-4 text-[#5f6368] flex-shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
@@ -115,10 +112,8 @@ function ConversationItem({
                 size="icon"
                 className={cn(
                   "h-7 w-7 text-[#5f6368] hover:bg-[#e8f0fe] transition-opacity duration-200",
-                  "opacity-100", // モバイル（ベース）は常に100%
-                  isHovered || dropdownOpen
-                    ? "md:opacity-100" // PC環境かつホバー時・メニュー開閉時は100%を表示
-                    : "md:opacity-0", // PC環境で非ホバー時は確実に0%にする
+                  "more-menu-btn",
+                  !dropdownOpen && "hide-on-pc",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
