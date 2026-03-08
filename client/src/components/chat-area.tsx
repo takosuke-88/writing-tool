@@ -91,7 +91,7 @@ export function ChatArea({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 flex flex-col bg-background min-h-0 h-full">
       {/* Title Bar */}
       <div className="flex-shrink-0 border-b border-border px-6 py-4 bg-background">
         {isEditingTitle ? (

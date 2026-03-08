@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -52,10 +52,6 @@ function useLocalStorage<T>(
   return [storedValue, setStoredValue];
 }
 
-import { Menu, Settings as SettingsIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-
 function ChatApp() {
   const { toast } = useToast();
 
@@ -66,10 +62,6 @@ function ChatApp() {
   >(null);
   const [messages, setMessages] = useState<Record<number, Message[]>>({});
   const [isLoading, setIsLoading] = useState(true);
-
-  // Mobile Drawer States
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
 
   // Fetch initial data
   useEffect(() => {
@@ -138,7 +130,7 @@ function ChatApp() {
     "chat-tavily-api-key",
     "",
   );
-  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(true); // Default open or closed? Maybe true if user is confused it's gone.
 
   // Fix legacy model IDs and temperature
   useEffect(() => {
@@ -149,23 +141,23 @@ function ChatApp() {
     if (model === "sonar-pro") {
       setModel("sonar");
       toast({
-        title: "モデル設定を更新しました",
-        description: "sonar-pro → sonar",
+        title: "繝｢繝・Ν險ｭ螳壹ｒ譖ｴ譁ｰ縺励∪縺励◆",
+        description: "sonar-pro 竊・sonar",
       });
     } else if (model === "gemini-3-pro-preview") {
       setModel("gemini-2.5-pro");
       toast({
-        title: "モデル設定を更新しました",
-        description: "gemini-3-pro → gemini-2.5-pro",
+        title: "繝｢繝・Ν險ｭ螳壹ｒ譖ｴ譁ｰ縺励∪縺励◆",
+        description: "gemini-3-pro 竊・gemini-2.5-pro",
       });
     } else if (model === "claude-4-5-sonnet-latest") {
       setModel("claude-sonnet-4-5");
       toast({
-        title: "モデル設定を更新しました",
-        description: "INVALID ID → claude-sonnet-4-5",
+        title: "繝｢繝・Ν險ｭ螳壹ｒ譖ｴ譁ｰ縺励∪縺励◆",
+        description: "INVALID ID 竊・claude-sonnet-4-5",
       });
     }
-  }, [model, temperature]);
+  }, [model, temperature]); // Run when model/temp changes (or on mount)
 
   // Handlers
   const handleNewConversation = async () => {
@@ -174,7 +166,7 @@ function ChatApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "新しい会話",
+          title: "譁ｰ縺励＞莨夊ｩｱ",
           model,
           temperature,
           maxTokens,
@@ -185,13 +177,12 @@ function ChatApp() {
       setConversations([newConv, ...conversations]);
       setMessages((prev) => ({ ...prev, [newConv.id]: [] }));
       setSelectedConversationId(newConv.id);
-      setIsMobileSidebarOpen(false); // Close sidebar on mobile
-      toast({ title: "新しい会話を作成しました" });
+      toast({ title: "譁ｰ縺励＞莨夊ｩｱ繧剃ｽ懈・縺励∪縺励◆" });
     } catch (err) {
       console.error(err);
       toast({
-        title: "エラー",
-        description: "会話の作成に失敗しました",
+        title: "繧ｨ繝ｩ繝ｼ",
+        description: "莨夊ｩｱ縺ｮ菴懈・縺ｫ螟ｱ謨励＠縺ｾ縺励◆",
         variant: "destructive",
       });
     }
@@ -206,7 +197,6 @@ function ChatApp() {
     if (!messages[conversation.id]) {
       fetchMessages(conversation.id);
     }
-    setIsMobileSidebarOpen(false); // Close sidebar on mobile
   };
 
   const handleDeleteConversation = async (id: number) => {
@@ -223,11 +213,11 @@ function ChatApp() {
         if (nextConv) fetchMessages(nextConv.id);
       }
 
-      toast({ title: "会話を削除しました" });
+      toast({ title: "莨夊ｩｱ繧貞炎髯､縺励∪縺励◆" });
     } catch (err) {
       toast({
-        title: "エラー",
-        description: "削除に失敗しました",
+        title: "繧ｨ繝ｩ繝ｼ",
+        description: "蜑企勁縺ｫ螟ｱ謨励＠縺ｾ縺励◆",
         variant: "destructive",
       });
     }
@@ -245,11 +235,11 @@ function ChatApp() {
           c.id === id ? { ...c, title, updatedAt: new Date() } : c,
         ),
       );
-      toast({ title: "タイトルを更新しました" });
+      toast({ title: "繧ｿ繧､繝医Ν繧呈峩譁ｰ縺励∪縺励◆" });
     } catch (err) {
       toast({
-        title: "エラー",
-        description: "タイトルの更新に失敗しました",
+        title: "繧ｨ繝ｩ繝ｼ",
+        description: "繧ｿ繧､繝医Ν縺ｮ譖ｴ譁ｰ縺ｫ螟ｱ謨励＠縺ｾ縺励◆",
         variant: "destructive",
       });
     }
@@ -316,6 +306,8 @@ function ChatApp() {
 
     try {
       const history = messages[selectedConversationId] || [];
+      // Filter out messages with empty content to prevent 400 errors from previous failed generations
+      // Also strip footer/signature patterns from message history to prevent AI echo loop
       const stripFooter = (text: string) => {
         return text
           .replace(/\n\n---\n(Search Model:[^\n]*\n\n?)?(Model:[^\n]*)?$/, "")
@@ -369,6 +361,7 @@ function ChatApp() {
                 const data = JSON.parse(dataStr);
                 if (data.type === "content") {
                   fullText += data.text;
+                  // Update UI
                   setMessages((prev) => {
                     const msgs = prev[selectedConversationId] || [];
                     return {
@@ -379,6 +372,8 @@ function ChatApp() {
                     };
                   });
                 } else if (data.type === "footer") {
+                  // Footer is displayed but stored separately from the main content
+                  // so it doesn't get sent back as history to the AI
                   fullText += data.text;
                   setMessages((prev) => {
                     const msgs = prev[selectedConversationId] || [];
@@ -393,13 +388,13 @@ function ChatApp() {
                   toast({ description: data.text, duration: 2000 });
                 } else if (data.type === "model_selected") {
                   toast({
-                    title: "モデル自動選択",
+                    title: "繝｢繝・Ν閾ｪ蜍暮∈謚・,
                     description: `Selected: ${data.model}`,
                   });
                 } else if (data.type === "warning") {
                   const apiName = data.api ? data.api.toUpperCase() : "API";
                   toast({
-                    title: `${apiName} 制限警告`,
+                    title: `${apiName} 蛻ｶ髯占ｭｦ蜻柿,
                     description: data.message,
                     variant: "destructive",
                     duration: 5000,
@@ -407,7 +402,7 @@ function ChatApp() {
                 } else if (data.type === "error") {
                   console.error("Received error frame:", data);
                   toast({
-                    title: "エラー",
+                    title: "繧ｨ繝ｩ繝ｼ",
                     description: data.message,
                     variant: "destructive",
                   });
@@ -438,10 +433,11 @@ function ChatApp() {
         }
       }
     } catch (error) {
+      // Syntax error fixed
       console.error("Chat error:", error);
       toast({
-        title: "エラーが発生しました",
-        description: "AIの応答を取得できませんでした。",
+        title: "繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆",
+        description: "AI縺ｮ蠢懃ｭ斐ｒ蜿門ｾ励〒縺阪∪縺帙ｓ縺ｧ縺励◆縲・,
         variant: "destructive",
       });
       // Remove the failed placeholder message
@@ -460,130 +456,57 @@ function ChatApp() {
   const handleStopGeneration = () => {
     setIsGenerating(false);
     toast({
-      title: "生成を停止しました",
+      title: "逕滓・繧貞●豁｢縺励∪縺励◆",
     });
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[100dvh] w-full bg-white overflow-hidden">
-      {/* Mobile Top Header - Visible only on md and down */}
-      <div className="md:hidden flex-shrink-0 flex items-center justify-between border-b border-[#dadce0] px-4 h-14 bg-white z-10">
-        <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-[#5f6368] hover:bg-[#f1f3f4]"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-[280px]">
-             <ChatSidebar
-              conversations={conversations}
-              selectedConversationId={selectedConversationId}
-              onSelectConversation={handleSelectConversation}
-              onNewConversation={handleNewConversation}
-              onDeleteConversation={handleDeleteConversation}
-              onUpdateTitle={handleUpdateTitle}
-              onToggleSettings={() => {
-                setIsMobileSidebarOpen(false);
-                setIsMobileSettingsOpen(true);
-              }}
-              className="w-full border-r-0"
-            />
-          </SheetContent>
-        </Sheet>
+    <div className="flex h-screen w-full overflow-hidden bg-white">
+      {/* Left Sidebar */}
+      <ChatSidebar
+        conversations={conversations}
+        selectedConversationId={selectedConversationId}
+        onSelectConversation={handleSelectConversation}
+        onNewConversation={handleNewConversation}
+        onDeleteConversation={handleDeleteConversation}
+        onUpdateTitle={handleUpdateTitle}
+        onToggleSettings={() => setIsSettingsOpen((prev: boolean) => !prev)}
+      />
 
-        <h1 className="text-base font-medium text-[#202124] truncate flex-1 text-center px-4">
-          {currentConversation?.title || "新しい会話"}
-        </h1>
+      {/* Main Chat Area */}
+      <ChatArea
+        conversationId={selectedConversationId}
+        title={currentConversation?.title || "譁ｰ縺励＞莨夊ｩｱ"}
+        messages={currentMessages}
+        onSendMessage={handleSendMessage}
+        onUpdateTitle={(title) =>
+          selectedConversationId &&
+          handleUpdateTitle(selectedConversationId, title)
+        }
+        onStopGeneration={handleStopGeneration}
+        isGenerating={isGenerating}
+      />
 
-        <Sheet open={isMobileSettingsOpen} onOpenChange={setIsMobileSettingsOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-[#5f6368] hover:bg-[#f1f3f4]"
-            >
-              <SettingsIcon className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="p-0 w-[300px] sm:w-[350px]">
-             <ChatSettingsPanel
-              model={model}
-              temperature={temperature}
-              maxTokens={maxTokens}
-              topP={topP}
-              systemInstructions={systemInstructions}
-              isSystemInstructionsOpen={isSystemInstructionsOpen}
-              onModelChange={setModel}
-              onTemperatureChange={setTemperature}
-              onMaxTokensChange={setMaxTokens}
-              onTopPChange={setTopP}
-              onSystemInstructionsChange={setSystemInstructions}
-              onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
-              searchMode={searchMode}
-              onSearchModeChange={setSearchMode}
-              tavilyApiKey={tavilyApiKey}
-              onTavilyApiKeyChange={setTavilyApiKey}
-              className="w-full border-l-0"
-            />
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      {/* PC Left Sidebar - Hidden on mobile */}
-      <div className="hidden md:block h-full">
-        <ChatSidebar
-          conversations={conversations}
-          selectedConversationId={selectedConversationId}
-          onSelectConversation={handleSelectConversation}
-          onNewConversation={handleNewConversation}
-          onDeleteConversation={handleDeleteConversation}
-          onUpdateTitle={handleUpdateTitle}
-          onToggleSettings={() => setIsSettingsOpen((prev) => !prev)}
-        />
-      </div>
-
-      {/* Main Chat Area - Expands to full width */}
-      <div className="flex-1 min-w-0 min-h-0 h-full">
-        <ChatArea
-          conversationId={selectedConversationId}
-          title={currentConversation?.title || "新しい会話"}
-          messages={currentMessages}
-          onSendMessage={handleSendMessage}
-          onUpdateTitle={(title) =>
-            selectedConversationId &&
-            handleUpdateTitle(selectedConversationId, title)
-          }
-          onStopGeneration={handleStopGeneration}
-          isGenerating={isGenerating}
-        />
-      </div>
-
-      {/* PC Right Settings Panel - Hidden on mobile */}
+      {/* Right Settings Panel */}
       {isSettingsOpen && (
-        <div className="hidden md:block h-full">
-          <ChatSettingsPanel
-            model={model}
-            temperature={temperature}
-            maxTokens={maxTokens}
-            topP={topP}
-            systemInstructions={systemInstructions}
-            isSystemInstructionsOpen={isSystemInstructionsOpen}
-            onModelChange={setModel}
-            onTemperatureChange={setTemperature}
-            onMaxTokensChange={setMaxTokens}
-            onTopPChange={setTopP}
-            onSystemInstructionsChange={setSystemInstructions}
-            onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
-            searchMode={searchMode}
-            onSearchModeChange={setSearchMode}
-            tavilyApiKey={tavilyApiKey}
-            onTavilyApiKeyChange={setTavilyApiKey}
-          />
-        </div>
+        <ChatSettingsPanel
+          model={model}
+          temperature={temperature}
+          maxTokens={maxTokens}
+          topP={topP}
+          systemInstructions={systemInstructions}
+          isSystemInstructionsOpen={isSystemInstructionsOpen}
+          onModelChange={setModel}
+          onTemperatureChange={setTemperature}
+          onMaxTokensChange={setMaxTokens}
+          onTopPChange={setTopP}
+          onSystemInstructionsChange={setSystemInstructions}
+          onSystemInstructionsOpenChange={setIsSystemInstructionsOpen}
+          searchMode={searchMode}
+          onSearchModeChange={setSearchMode}
+          tavilyApiKey={tavilyApiKey}
+          onTavilyApiKeyChange={setTavilyApiKey}
+        />
       )}
     </div>
   );
