@@ -205,14 +205,14 @@ export function ChatSettingsPanel({
             </div>
             <Slider
               min={0}
-              max={100}
+              max={200}
               step={1}
               value={[temperature]}
               onValueChange={([value]) => onTemperatureChange(value)}
               className="w-full"
             />
             <p className="text-xs text-[#5f6368]">
-              低い値: より決定的、高い値: よりランダム (0.00-1.00)
+              低い値: より決定的、高い値: よりランダム (0.00-2.00)
             </p>
           </div>
 

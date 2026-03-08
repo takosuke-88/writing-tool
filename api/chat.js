@@ -637,14 +637,15 @@ async function streamGemini(
     const appliedTopP = typeof topP === "number" ? topP : 0.8;
     const appliedMaxTokens = typeof maxTokens === "number" ? maxTokens : 2048;
 
+    // Convert messages to Gemini format
+    const geminiMessages = messages.map(msg => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content || "" }]
+    }));
+
     // Build the request body
     const requestBody = {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: lastUserMessage.content }],
-        },
-      ],
+      contents: geminiMessages,
       generationConfig: {
         maxOutputTokens: appliedMaxTokens,
         temperature: appliedTemp,
@@ -943,11 +944,9 @@ export default async function handler(req, res) {
     const parsedTopPRaw = parseFloat(topP);
     const parsedMaxTokens = parseInt(maxTokens, 10) || 4096;
 
-    // Normalizing for APIs (0.0 - 1.0/2.0)
-    // If client sends > 2, distinctively treated as slider value 0-100.
-    // If client sends <= 1, treated as raw value.
-    const safeTemp = parsedTempRaw > 1 ? parsedTempRaw / 100 : parsedTempRaw;
-    const safeTopP = parsedTopPRaw > 1 ? parsedTopPRaw / 100 : parsedTopPRaw;
+    // Normalizing for APIs: client stores it as 0-200 integer representing 0.00-2.00.
+    const safeTempRaw = !isNaN(parsedTempRaw) ? Math.max(0, parsedTempRaw) / 100 : 0.7;
+    const safeTopP = !isNaN(parsedTopPRaw) ? Math.max(0, Math.min(100, parsedTopPRaw)) / 100 : 1.0;
 
     let model = requestedModel;
     if (model === "auto") {
@@ -974,7 +973,9 @@ export default async function handler(req, res) {
     }
 
     // --- ROUTING LOGIC ---
+    let safeTemp = safeTempRaw;
     if (model.startsWith("sonar") || model.includes("perplexity")) {
+      safeTemp = Math.min(1.99, safeTempRaw);
       return await streamPerplexity(
         res,
         model,
@@ -987,6 +988,7 @@ export default async function handler(req, res) {
     }
 
     if (model.includes("gemini")) {
+      safeTemp = Math.min(2.0, safeTempRaw);
       return await streamGemini(
         res,
         model,
@@ -999,7 +1001,7 @@ export default async function handler(req, res) {
     }
 
     // --- ANTHROPIC (DEFAULT) ---
-    // ... (Original Anthropic Streaming Logic)
+    safeTemp = Math.min(1.0, safeTempRaw);
     let conversationMessages = [...messages];
     let isFinalResponse = false;
     let iteration = 0;

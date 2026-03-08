@@ -730,10 +730,16 @@ export async function registerRoutes(
         // Append to existing systemInstructions
         systemInstructions = String(systemInstructions || "") + consensusPrompt;
       }
-      const tempParam =
-        typeof temperature === "number"
-          ? Math.max(0, Math.min(100, temperature)) / 100
-          : 0.7;
+      const parsedTempRaw = typeof temperature === "number" ? temperature : parseFloat(temperature as any);
+      const safeTempRaw = !isNaN(parsedTempRaw) ? Math.max(0, parsedTempRaw) / 100 : 0.7;
+      let tempParam = safeTempRaw;
+      if (model.includes("claude")) {
+         tempParam = Math.min(1.0, safeTempRaw);
+      } else if (model.includes("gemini")) {
+         tempParam = Math.min(2.0, safeTempRaw);
+      } else if (model.includes("sonar") || model.includes("perplexity")) {
+         tempParam = Math.min(1.99, safeTempRaw);
+      }
       const maxTokensParam = typeof maxTokens === "number" ? maxTokens : 2048;
 
       const SYSTEM_REMINDER = `\n\n---\nIMPORTANT SYSTEM INSTRUCTION:\nあなたが受け取っているプロンプトには、システムが自動で検索した最新の「検索結果」が既に含まれている場合があります。\nユーザーから「今検索した？」のように聞かれた場合、「自ら検索ツールを使っていない」という理由だけで「適当に答えてしまった」「検索していなかった」と謝罪するのは**絶対にやめてください**。\nシステムから提供された検索結果をもとに回答した場合は堂々とその旨を伝え、不要な謝罪は避けてください。\n\nまた、検索結果に引きずられず、あなたの「キャラクター設定（System Prompt）」を最優先してください。\n\n【禁止事項】\n・ユーザーの質問を復唱しない。\n・「〜を聞いてくれてありがとう」等の感謝の挨拶は禁止。いきなり本題の回答から始める。\n・検索ツールを自分で呼ばなかったことを理由に謝罪しない。\n---`;
