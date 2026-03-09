@@ -605,10 +605,34 @@ export async function registerRoutes(
   // Conversations API
   // ============================================
 
+  /**
+   * 古いDB レコードや欠損フィールドを持つ会話データを
+   * フロントエンドが期待する完全な構造に正規化する。
+   * これにより、スキーマ変更後に残った古いレコードが
+   * フロントでサイレントエラーを起こすのを防ぐ。
+   */
+  const normalizeConversation = (conv: any) => {
+    const now = new Date();
+    return {
+      id: typeof conv?.id === "number" ? conv.id : 0,
+      title: typeof conv?.title === "string" && conv.title.trim() !== "" ? conv.title : "新しい会話",
+      createdAt: conv?.createdAt instanceof Date ? conv.createdAt : (conv?.createdAt ? new Date(conv.createdAt) : now),
+      updatedAt: conv?.updatedAt instanceof Date ? conv.updatedAt : (conv?.updatedAt ? new Date(conv.updatedAt) : now),
+      model: typeof conv?.model === "string" && conv.model.trim() !== "" ? conv.model : "claude-sonnet-4-5",
+      temperature: typeof conv?.temperature === "number" ? conv.temperature : 70,
+      maxTokens: typeof conv?.maxTokens === "number" ? conv.maxTokens : 4096,
+      topP: typeof conv?.topP === "number" ? conv.topP : 100,
+    };
+  };
+
   app.get("/api/conversations", async (_req, res) => {
     try {
       const convs = await storage.getConversations();
-      res.json(convs);
+      // 欠損・null・型不整合フィールドを補完してから返す
+      const normalized = (Array.isArray(convs) ? convs : [])
+        .filter((c: any) => c != null && typeof c?.id === "number")
+        .map(normalizeConversation);
+      res.json(normalized);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

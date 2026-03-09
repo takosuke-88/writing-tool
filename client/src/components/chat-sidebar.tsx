@@ -51,7 +51,11 @@ function ConversationItem({
   onDelete: (id: number) => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const isEditing = editingId === conversation.id;
+  const isEditing = editingId === conversation?.id;
+
+  // 防御的ガード: conversationが壊れていたらレンダリングをスキップ
+  if (!conversation || typeof conversation.id !== "number") return null;
+
 
   const formatDate = (date: Date) => {
     const now = new Date();
@@ -104,11 +108,11 @@ function ConversationItem({
           />
         ) : (
           <p className="text-sm text-sidebar-foreground truncate font-medium">
-            {conversation.title}
+            {conversation.title ?? "新しい会話"}
           </p>
         )}
         <p className="text-xs text-sidebar-foreground/70 mt-0.5">
-          {formatDate(conversation.updatedAt)}
+          {conversation.updatedAt ? formatDate(conversation.updatedAt) : ""}
         </p>
       </div>
 

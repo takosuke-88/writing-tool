@@ -56,6 +56,25 @@ import { Menu, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
+// Normalize and defensively filter conversations from API
+// to prevent silent render failures from stale/corrupt DB records
+function normalizeConversations(raw: any[]): Conversation[] {
+  if (!Array.isArray(raw)) return [];
+  const now = new Date();
+  return raw
+    .filter((c) => c != null && typeof c?.id === "number")
+    .map((c) => ({
+      id: c.id,
+      title: typeof c.title === "string" && c.title.trim() !== "" ? c.title : "新しい会話",
+      createdAt: c.createdAt ? new Date(c.createdAt) : now,
+      updatedAt: c.updatedAt ? new Date(c.updatedAt) : now,
+      model: typeof c.model === "string" && c.model.trim() !== "" ? c.model : "claude-sonnet-4-5",
+      temperature: typeof c.temperature === "number" ? c.temperature : 70,
+      maxTokens: typeof c.maxTokens === "number" ? c.maxTokens : 4096,
+      topP: typeof c.topP === "number" ? c.topP : 100,
+    }));
+}
+
 function ChatApp() {
   const { toast } = useToast();
 
@@ -76,9 +95,10 @@ function ChatApp() {
     fetch("/api/conversations")
       .then((res) => res.json())
       .then((data) => {
-        setConversations(data);
-        if (data.length > 0) {
-          const firstId = data[0].id;
+        const safe = normalizeConversations(data);
+        setConversations(safe);
+        if (safe.length > 0) {
+          const firstId = safe[0].id;
           setSelectedConversationId(firstId);
           fetchMessages(firstId);
         }
