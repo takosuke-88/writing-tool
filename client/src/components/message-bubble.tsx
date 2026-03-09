@@ -79,7 +79,7 @@ export function MessageBubble({
             </span>
           </div>
 
-          <div className="prose text-base md:prose-sm max-w-none text-foreground">
+          <div className="prose prose-base max-w-none">
             {isLoading && !content ? (
               <div className="flex items-center gap-2 text-muted-foreground py-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -95,14 +95,14 @@ export function MessageBubble({
                         style={vscDarkPlus as any}
                         language={match[1]}
                         PreTag="div"
-                        className="rounded-lg text-sm md:text-xs"
+                        className="rounded-lg text-sm"
                         {...props}
                       >
                         {String(children).replace(/\n$/, "")}
                       </SyntaxHighlighter>
                     ) : (
                       <code
-                        className="bg-muted px-1.5 py-0.5 rounded text-base md:text-sm"
+                        className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono"
                         {...props}
                       >
                         {children}
@@ -111,44 +111,44 @@ export function MessageBubble({
                   },
                   p({ children }) {
                     return (
-                      <p className="text-foreground leading-relaxed mb-4 last:mb-0">
-                        {children}
-                      </p>
+                      <p className="text-base leading-7 text-gray-800 dark:text-gray-200 mb-4 last:mb-0">
+                      {children}
+                    </p>
                     );
                   },
                   h1({ children }) {
                     return (
-                      <h1 className="text-3xl md:text-2xl font-semibold text-foreground mt-6 mb-4">
-                        {children}
-                      </h1>
+                      <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-4">
+                      {children}
+                    </h1>
                     );
                   },
                   h2({ children }) {
                     return (
-                      <h2 className="text-2xl md:text-xl font-semibold text-foreground mt-5 mb-3">
-                        {children}
-                      </h2>
+                      <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-5 mb-3">
+                      {children}
+                    </h2>
                     );
                   },
                   h3({ children }) {
                     return (
-                      <h3 className="text-xl md:text-lg font-semibold text-foreground mt-4 mb-2">
-                        {children}
-                      </h3>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mt-4 mb-2">
+                      {children}
+                    </h3>
                     );
                   },
                   ul({ children }) {
                     return (
-                      <ul className="list-disc list-inside space-y-1 text-foreground mb-4">
-                        {children}
-                      </ul>
+                      <ul className="list-disc list-inside space-y-1.5 text-base text-gray-800 dark:text-gray-200 mb-4 leading-7">
+                      {children}
+                    </ul>
                     );
                   },
                   ol({ children }) {
                     return (
-                      <ol className="list-decimal list-inside space-y-1 text-foreground mb-4">
-                        {children}
-                      </ol>
+                      <ol className="list-decimal list-inside space-y-1.5 text-base text-gray-800 dark:text-gray-200 mb-4 leading-7">
+                      {children}
+                    </ol>
                     );
                   },
                   a({ children, href }) {
