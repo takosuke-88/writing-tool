@@ -3,6 +3,14 @@ import type { Config } from "tailwindcss";
 export default {
   darkMode: ["class"],
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
+  safelist: [
+    // 3点リーダーの表示制御 - 本番ビルドでパージされないよう保護
+    "opacity-0",
+    "opacity-100",
+    "md:opacity-0",
+    "md:opacity-100",
+    "md:group-hover:opacity-100",
+  ],
   theme: {
     extend: {
       borderRadius: {
