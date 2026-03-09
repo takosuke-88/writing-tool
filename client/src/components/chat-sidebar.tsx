@@ -52,6 +52,7 @@ function ConversationItem({
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isEditing = editingId === conversation.id;
+  const longPressFiredRef = useRef(false);
 
   const formatDate = (date: Date) => {
     const now = new Date();
@@ -75,8 +76,30 @@ function ConversationItem({
         isSelected ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50",
       )}
       onClick={() => {
+        if (longPressFiredRef.current) {
+          longPressFiredRef.current = false;
+          return;
+        }
         if (!isEditing) onSelect();
       }}
+      onContextMenu={(e) => {
+        if (!isEditing) {
+          e.preventDefault();
+          longPressFiredRef.current = true;
+          // React synthetic events might not fire onClick after contextmenu,
+          // but if they do, longPressFiredRef catches it. Reset it just in case.
+          setTimeout(() => {
+            longPressFiredRef.current = false;
+          }, 500);
+          setDropdownOpen(true);
+        }
+      }}
+      style={
+        {
+          WebkitTouchCallout: isEditing ? "auto" : "none",
+          userSelect: isEditing ? "auto" : "none",
+        } as React.CSSProperties
+      }
     >
       <MessageSquare className="h-4 w-4 text-sidebar-foreground/70 flex-shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
@@ -113,9 +136,8 @@ function ConversationItem({
                 size="icon"
                 className={cn(
                   "h-7 w-7 text-sidebar-foreground/70 hover:bg-sidebar-accent transition-opacity duration-200",
-                  // PC environments (md and above): hide by default, show on parent group hover or when dropdown is open
-                  "md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto",
-                  dropdownOpen && "md:opacity-100 md:pointer-events-auto",
+                  "opacity-100 md:opacity-0 md:group-hover:opacity-100",
+                  dropdownOpen && "md:opacity-100",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
