@@ -15,6 +15,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Conversation } from "@shared/schema";
@@ -51,8 +57,8 @@ function ConversationItem({
   onDelete: (id: number) => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const isEditing = editingId === conversation.id;
-  const longPressFiredRef = useRef(false);
 
   const formatDate = (date: Date) => {
     const now = new Date();
@@ -69,115 +75,135 @@ function ConversationItem({
     });
   };
 
+  const handleEdit = () => {
+    setDropdownOpen(false);
+    setTimeout(() => {
+      onStartEditing(conversation.id, conversation.title);
+    }, 150);
+  };
+
+  const handleDelete = () => {
+    setDropdownOpen(false);
+    onDelete(conversation.id);
+  };
+
+  // Import ContextMenu parts dynamically here or using normal imports
+  // since this is a small functional wrapper, we will directly render the items
+  // assuming ContextMenu components were imported at the top.
+  // We'll use them here.
   return (
-    <div
-      className={cn(
-        "group relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors",
-        isSelected ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50",
-      )}
-      onClick={() => {
-        if (longPressFiredRef.current) {
-          longPressFiredRef.current = false;
-          return;
-        }
-        if (!isEditing) onSelect();
-      }}
-      onContextMenu={(e) => {
-        if (!isEditing) {
-          e.preventDefault();
-          longPressFiredRef.current = true;
-          // React synthetic events might not fire onClick after contextmenu,
-          // but if they do, longPressFiredRef catches it. Reset it just in case.
-          setTimeout(() => {
-            longPressFiredRef.current = false;
-          }, 500);
-          setDropdownOpen(true);
-        }
-      }}
-      style={
-        {
-          WebkitTouchCallout: isEditing ? "auto" : "none",
-          userSelect: isEditing ? "auto" : "none",
-        } as React.CSSProperties
-      }
-    >
-      <MessageSquare className="h-4 w-4 text-sidebar-foreground/70 flex-shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        {isEditing ? (
-          <InlineEditInput
-            initialTitle={conversation.title}
-            onSave={(newTitle) => {
-              onFinishEditing(conversation.id, newTitle);
-            }}
-            onCancel={() => {
-              onFinishEditing(conversation.id, "");
-            }}
-          />
-        ) : (
-          <p className="text-sm text-sidebar-foreground truncate font-medium">
-            {conversation.title}
-          </p>
-        )}
-        <p className="text-xs text-sidebar-foreground/70 mt-0.5">
-          {formatDate(conversation.updatedAt)}
-        </p>
-      </div>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={cn(
+            "relative flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 transition-colors select-none",
+            isSelected ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50",
+          )}
+          onClick={(e) => {
+            if (!isEditing) onSelect();
+          }}
+          style={
+            {
+              WebkitTouchCallout: isEditing ? "auto" : "none",
+            } as React.CSSProperties
+          }
+        >
+          <MessageSquare className="h-4 w-4 text-sidebar-foreground/70 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <InlineEditInput
+                initialTitle={conversation.title}
+                onSave={(newTitle) => {
+                  onFinishEditing(conversation.id, newTitle);
+                }}
+                onCancel={() => {
+                  onFinishEditing(conversation.id, "");
+                }}
+              />
+            ) : (
+              <p className="text-sm text-sidebar-foreground truncate font-medium">
+                {conversation.title}
+              </p>
+            )}
+            <p className="text-xs text-sidebar-foreground/70 mt-0.5">
+              {formatDate(conversation.updatedAt)}
+            </p>
+          </div>
+
+          {!isEditing && (
+            <div className="flex-shrink-0">
+              <DropdownMenu
+                open={dropdownOpen}
+                onOpenChange={setDropdownOpen}
+                modal={false} // Crucial for onMouseLeave not firing incorrectly
+              >
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-7 w-7 text-sidebar-foreground/70 hover:bg-sidebar-accent transition-all duration-200",
+                      "opacity-100 md:opacity-0", // Default: always visible on mobile, hidden on PC
+                      (isHovered || dropdownOpen) && "md:opacity-100", // Visible if hovered or open on PC
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-36"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleEdit();
+                    }}
+                    className="cursor-pointer flex items-center gap-2"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    <span>名前変更</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleDelete();
+                    }}
+                    className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>削除</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        </div>
+      </ContextMenuTrigger>
 
       {!isEditing && (
-        <div className="flex-shrink-0">
-          <DropdownMenu
-            open={dropdownOpen}
-            onOpenChange={setDropdownOpen}
-            modal={false}
+        <ContextMenuContent className="w-48 z-50">
+          <ContextMenuItem
+            onSelect={handleEdit}
+            className="cursor-pointer flex items-center gap-2 p-2"
           >
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-7 w-7 text-sidebar-foreground/70 hover:bg-sidebar-accent transition-opacity duration-200",
-                  "opacity-100 md:opacity-0 md:group-hover:opacity-100",
-                  dropdownOpen && "md:opacity-100",
-                )}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-36"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setDropdownOpen(false);
-                  setTimeout(() => {
-                    onStartEditing(conversation.id, conversation.title);
-                  }, 150);
-                }}
-                className="cursor-pointer flex items-center gap-2"
-              >
-                <Edit2 className="h-4 w-4" />
-                <span>名前変更</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setDropdownOpen(false);
-                  onDelete(conversation.id);
-                }}
-                className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>削除</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            <Edit2 className="h-4 w-4" />
+            <span>名前変更</span>
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={handleDelete}
+            className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2 p-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>削除</span>
+          </ContextMenuItem>
+        </ContextMenuContent>
       )}
-    </div>
+    </ContextMenu>
   );
 }
 
