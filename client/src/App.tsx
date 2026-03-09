@@ -162,7 +162,8 @@ function ChatApp() {
 
   // Fix legacy model IDs and temperature
   useEffect(() => {
-    if (temperature > 100) {
+    // Temperatureスライダーは 0-200 (= 0.00-2.00) のため、200超のみリセット
+    if (temperature > 200) {
       setTemperature(70);
     }
     // Migrate legacy/invalid model IDs
@@ -360,6 +361,7 @@ function ChatApp() {
           topP,
           systemInstructions,
           searchMode,
+          tavilyApiKey,
         }),
       });
 
